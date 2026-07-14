@@ -1,8 +1,30 @@
 # Open Artifacts
 
-Open Artifacts is an npm-workspace TypeScript project.
+Open Artifacts compiles structured AI output into portable, high-density web artifacts that people can
+scan, annotate, and return to an AI as precise change requests.
 
-The template intentionally leaves `apps/web` empty. Choose Next.js, Vite, Astro, Remix, or another web stack when a real project needs one.
+The first Vite + React prototype validates one loop: edit an Artifact Package as JSON, render the same
+data through three semantic layouts, select a visible block, and emit annotation JSON with a stable
+target path.
+
+## Run the prototype
+
+```bash
+npm install
+npm run dev
+```
+
+Open the local URL and switch among:
+
+- `?variant=atlas` — simultaneous high-density overview;
+- `?variant=brief` — guided reading path;
+- `?variant=trace` — evidence-to-action provenance.
+
+The prototype is intentionally marked as throwaway. Its question and design hypotheses live in
+[`apps/web/src/prototype/NOTES.md`](apps/web/src/prototype/NOTES.md). The durable product boundary is
+defined in [`docs/product-brief.md`](docs/product-brief.md), with the competitive landscape in
+[`docs/research/landscape.md`](docs/research/landscape.md) and the draft package contract in
+[`docs/spec/artifact-package.v0.1.schema.json`](docs/spec/artifact-package.v0.1.schema.json).
 
 ## Structure
 
@@ -12,7 +34,7 @@ open-artifacts/
 │   ├── android/             # Empty Android app slot; choose a stack later
 │   ├── ios/                 # Empty iOS app slot; choose a stack later
 │   ├── server/              # Optional backend service slot
-│   └── web/                 # Empty web app slot; choose a stack later
+│   └── web/                 # Vite + React interaction prototype
 ├── packages/
 │   ├── config/              # Shared configuration helpers
 │   ├── database/            # Database schema/model/migration boundary
