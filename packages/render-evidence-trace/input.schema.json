@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://open-artifacts.dev/render-packages/evidence-trace/input.schema.json",
+  "title": "Evidence Trace input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["title", "summary", "sources", "claims", "outcomes"],
+  "properties": {
+    "title": { "type": "string" },
+    "summary": { "type": "string" },
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "type", "label", "detail"],
+        "properties": {
+          "id": { "type": "string" },
+          "type": { "type": "string" },
+          "label": { "type": "string" },
+          "detail": { "type": "string" }
+        }
+      }
+    },
+    "claims": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "label", "statement", "confidence", "sourceIds"],
+        "properties": {
+          "id": { "type": "string" },
+          "label": { "type": "string" },
+          "statement": { "type": "string" },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+          "sourceIds": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "outcomes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "title", "detail", "state", "claimIds"],
+        "properties": {
+          "id": { "type": "string" },
+          "title": { "type": "string" },
+          "detail": { "type": "string" },
+          "state": { "enum": ["accepted", "testing", "deferred"] },
+          "claimIds": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    }
+  }
+}

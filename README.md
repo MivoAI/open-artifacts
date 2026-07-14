@@ -1,82 +1,106 @@
 # Open Artifacts
 
-Open Artifacts compiles structured AI output into portable, high-density web artifacts that people can
-scan, annotate, and return to an AI as precise change requests.
+Open Artifacts is a source-first format and local workbench for React renders. A **Render Package is
+the renderer itself**: editable TSX source, npm dependencies, styles, an input schema, and example
+JSON published together as one ordinary npm package.
 
-The first Vite + React prototype validates one loop: edit an Artifact Package as JSON, render the same
-data through three semantic layouts, select a visible block, and emit annotation JSON with a stable
-target path.
+The model is deliberately small:
 
-## Run the prototype
+```text
+Render Package (source) + Render Input (JSON) -> React page
+```
+
+Annotation is not part of the required package interface. A host may add it later as an overlay.
+
+## Run the workbench
 
 ```bash
 npm install
 npm run dev
 ```
 
-Open the local URL and switch among:
+The workbench discovers source packages under `packages/render-*` from their npm manifests. It
+currently includes:
 
-- `?variant=atlas` — simultaneous high-density overview;
-- `?variant=brief` — guided reading path;
-- `?variant=trace` — evidence-to-action provenance.
+- `decision-board` — a high-density dashboard that owns its ECharts dependency;
+- `evidence-trace` — an interactive evidence-to-decision view built with plain React.
 
-The prototype is intentionally marked as throwaway. Its question and design hypotheses live in
-[`apps/web/src/prototype/NOTES.md`](apps/web/src/prototype/NOTES.md). The durable product boundary is
-defined in [`docs/product-brief.md`](docs/product-brief.md), with the competitive landscape in
-[`docs/research/landscape.md`](docs/research/landscape.md) and the draft package contract in
-[`docs/spec/artifact-package.v0.1.schema.json`](docs/spec/artifact-package.v0.1.schema.json).
+Edit the JSON on the right to update the selected render immediately. Switch packages on the left to
+prove that the host does not know either input model or visual implementation.
 
-## Structure
+## Render Package v0
+
+```text
+packages/render-my-render/
+├── package.json
+├── README.md
+├── input.schema.json
+├── example.json
+├── tsconfig.json
+└── src/
+    └── index.tsx
+```
+
+`package.json` is the only manifest. Its public interface is:
+
+```json
+{
+  "exports": {
+    ".": "./src/index.tsx",
+    "./schema": "./input.schema.json",
+    "./example": "./example.json",
+    "./package.json": "./package.json"
+  },
+  "openArtifacts": {
+    "format": "react-render/v0"
+  }
+}
+```
+
+The default source export accepts one prop:
+
+```tsx
+export default function Render({ data }: { data: MyInput }) {
+  return <main>{/* any React and npm ecosystem code */}</main>;
+}
+```
+
+React is a peer dependency supplied by the host. ECharts, React Flow, TanStack Table, Three.js, or
+other implementation dependencies belong to the Render Package that uses them.
+
+See [`docs/render-package-format.md`](docs/render-package-format.md) for the normative v0 contract.
+
+## Fork a render
+
+```bash
+cp -R packages/render-decision-board packages/render-my-render
+```
+
+Change the copied `package.json` name to `@open-artifacts/render-my-render`, then edit `src/index.tsx`,
+`input.schema.json`, and `example.json`. Run `npm install` and restart the workbench; its Vite plugin
+discovers the npm manifest and loads public package exports without a manual registry entry.
+
+## Repository structure
 
 ```text
 open-artifacts/
-├── apps/
-│   ├── android/             # Empty Android app slot; choose a stack later
-│   ├── ios/                 # Empty iOS app slot; choose a stack later
-│   ├── server/              # Optional backend service slot
-│   └── web/                 # Vite + React interaction prototype
-├── packages/
-│   ├── config/              # Shared configuration helpers
-│   ├── database/            # Database schema/model/migration boundary
-│   ├── domain/              # Business/domain logic
-│   ├── testing/             # Shared test helpers
-│   ├── ui/                  # Shared UI package, if needed
-│   └── utils/               # Shared utilities
-├── e2e/                     # Integration tests across system boundaries
-├── evals/                   # Evaluations that call real models
-├── docs/                    # Architecture and quality documentation
-├── scripts/                 # Local automation
-├── .github/                 # GitHub Actions
-└── .githooks/               # Local git hooks
+├── apps/web/                # Thin discovery, JSON input, and mount host
+├── packages/render-*/       # Forkable source Render Packages
+├── packages/                # Other reusable libraries and infrastructure
+├── e2e/                     # Package format and public runtime contract tests
+├── docs/                    # Product, architecture, and format decisions
+├── evals/                   # Real-model evaluations (not implemented yet)
+└── scripts/                 # Workspace automation
 ```
 
-## Commands
+## Quality commands
 
 ```bash
-npm install
 npm run lint
 npm run test
 npm run e2e
-npm run eval
 npm run build
 ```
 
-The four quality contracts are stable: `lint` is static analysis, `test` is unit testing, `e2e` is integration testing, and `eval` runs real-model evaluations. Run each command explicitly; `eval` remains separate because it uses model credentials and may incur cost. See `docs/quality-gates.md` for CI and credential boundaries.
-
-On the first install in a repository created from this template, `npm install` derives the project name from the clone directory and updates the root package name, workspace package scope, lockfile, README, dependencies, and Git hooks. Later installs are idempotent. To override the derived scope or title, set `ONEE_PROJECT_SCOPE` or `ONEE_PROJECT_TITLE` on the same command.
-
-```bash
-ONEE_PROJECT_SCOPE=acme ONEE_PROJECT_TITLE="Acme Product" npm install
-```
-
-## GitHub Template Setup
-
-From `onee-workspace`, create and initialize a public product repository with one command:
-
-```bash
-make create-product name=my-product
-```
-
-For a repository created directly through GitHub's template interface, clone it into the intended project directory and run `npm install` before beginning product work.
-
-See `docs/bootstrap.md` for the setup checklist.
+`npm run eval` remains separate because it will call real models and is intentionally not implemented
+until a model workflow and scoring contract exist.

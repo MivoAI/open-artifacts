@@ -1,0 +1,123 @@
+{
+  "meta": {
+    "eyebrow": "Render Package / decision-board",
+    "title": "Package 本身就是可执行的 React 源码",
+    "question": "怎样让 AI 用高信息密度呈现内容，同时让开发者能在本地直接 fork？",
+    "summary": "把 Render Package 定义成普通 npm 源码包。AI 只生成符合该 package schema 的 JSON；package 自己拥有 React 页面、样式与第三方依赖，宿主只负责发现、输入与挂载。",
+    "tags": ["source-first", "React", "forkable", "npm-native"]
+  },
+  "metrics": [
+    {
+      "id": "runtime-interface",
+      "label": "运行时接口",
+      "value": 1,
+      "unit": " prop",
+      "note": "只接收 data",
+      "trend": [6, 5, 4, 3, 2, 1]
+    },
+    {
+      "id": "source-coverage",
+      "label": "源码覆盖",
+      "value": 100,
+      "unit": "%",
+      "note": "发布物不以 dist 为主",
+      "trend": [30, 46, 58, 74, 88, 100]
+    },
+    {
+      "id": "real-adapters",
+      "label": "真实 Render",
+      "value": 2,
+      "unit": " 个",
+      "note": "证明 seam 不是假设",
+      "trend": [0, 0, 1, 1, 1, 2]
+    },
+    {
+      "id": "host-callbacks",
+      "label": "宿主回调",
+      "value": 0,
+      "unit": " 个",
+      "note": "v0 不引入 SDK",
+      "trend": [5, 4, 3, 2, 1, 0]
+    }
+  ],
+  "claims": [
+    {
+      "id": "package-is-render",
+      "kind": "principle",
+      "title": "Render Package 不是 renderer 的配置引用",
+      "body": "默认导出就是 React component；schema、example、CSS 和组件树都和它放在同一个源码目录里。",
+      "confidence": 0.98,
+      "evidence": ["package.json exports", "src/index.tsx"]
+    },
+    {
+      "id": "ecosystem-owned",
+      "kind": "signal",
+      "title": "复杂度属于 package，而不是宿主",
+      "body": "这个面板直接声明并使用 ECharts。另一个 Render 可以选择完全不同的库，宿主无需知道。",
+      "confidence": 0.94,
+      "evidence": ["echarts dependency", "TrendChart"]
+    },
+    {
+      "id": "fork-locality",
+      "kind": "principle",
+      "title": "复制目录就是 fork 的起点",
+      "body": "源码、输入契约、样例和依赖声明具有 locality；fork 后无需修改宿主 registry 或引用私有模块。",
+      "confidence": 0.93,
+      "evidence": ["package manifest discovery", "package contract test"]
+    },
+    {
+      "id": "trusted-runtime",
+      "kind": "risk",
+      "title": "v0 只运行可信源码",
+      "body": "in-process React 能换来生态复用与即时 HMR，但它不是沙箱。未知 package 的隔离属于后续 runtime 设计。",
+      "confidence": 0.9,
+      "evidence": ["browser runtime boundary"]
+    }
+  ],
+  "steps": [
+    {
+      "label": "01",
+      "title": "选择 Render Package",
+      "detail": "宿主从 packages/render-* 的 manifest 自动发现源码包。",
+      "state": "done"
+    },
+    {
+      "label": "02",
+      "title": "AI 生成 Render Input",
+      "detail": "JSON 由 package 自己的 schema 约束。",
+      "state": "done"
+    },
+    {
+      "label": "03",
+      "title": "挂载默认导出",
+      "detail": "宿主只调用 <Render data={input} />。",
+      "state": "active"
+    },
+    {
+      "label": "04",
+      "title": "复制源码 fork",
+      "detail": "开发者在本地直接修改 React 与依赖。",
+      "state": "next"
+    }
+  ],
+  "actions": [
+    {
+      "title": "冻结 source package v0",
+      "detail": "只保留默认导出、schema 和 example 三个接口。",
+      "owner": "Format",
+      "state": "ready"
+    },
+    {
+      "title": "验证真实生态依赖",
+      "detail": "让依赖只出现在使用它的 Render Package 中。",
+      "owner": "Runtime",
+      "state": "ready"
+    },
+    {
+      "title": "延后不可信代码隔离",
+      "detail": "先明确 trusted runtime 边界，再研究 iframe 或 sandbox。",
+      "owner": "Security",
+      "state": "later"
+    }
+  ]
+}

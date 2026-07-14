@@ -3,6 +3,13 @@
 > 调研快照：2026-07-14
 > 方法：只采用官方文档、官方产品页面、官方 GitHub 仓库和标准规范。下文的「覆盖」表示公开资料明确展示了该能力，不等于对稳定性、性能或商业可用性的背书。厂商自行公布的性能数字会单独标注。
 
+> **产品结论更新（2026-07-14）：** 本文保留最初的市场证据与当时推导，但其中
+> “Artifact Manifest + renderer 引用 + Annotation-first”的建议已经被创始人修正，不再代表现行架构。
+> 当前核心是 **源码发布的 React Render Package**：npm package 本身就是 render，AI 输出它的
+> JSON input，用户可以在本地直接 fork 源码。现行边界见
+> [`docs/product-brief.md`](../product-brief.md) 与
+> [`docs/render-package-format.md`](../render-package-format.md)。
+
 ## 一句话结论
 
 值得做，但 Open Artifacts 不应该把自己定义成「另一个 Generative UI 框架」。

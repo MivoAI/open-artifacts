@@ -1,0 +1,338 @@
+.oa-evidence-trace {
+  --et-ink: #172231;
+  --et-muted: #6c7785;
+  --et-line: #d7dee6;
+  --et-blue: #315be8;
+  --et-orange: #ed7743;
+  --et-green: #008e78;
+  width: 100%;
+  min-width: 760px;
+  min-height: 100%;
+  padding: 28px;
+  background:
+    linear-gradient(90deg, rgb(49 91 232 / 3%) 1px, transparent 1px) 0 0 / 80px 80px,
+    linear-gradient(rgb(49 91 232 / 3%) 1px, transparent 1px) 0 0 / 80px 80px,
+    #fafbfd;
+  color: var(--et-ink);
+  font-family: 'Avenir Next', Avenir, 'Segoe UI', sans-serif;
+}
+
+.oa-evidence-trace * {
+  box-sizing: border-box;
+}
+
+.et-header {
+  display: grid;
+  align-items: end;
+  gap: 40px;
+  padding: 8px 2px 30px;
+  border-bottom: 1px solid var(--et-ink);
+  grid-template-columns: minmax(0, 1.2fr) minmax(300px, 0.8fr);
+}
+
+.et-header span,
+.et-lane > header > span,
+.et-lane > header small,
+.et-source-card span,
+.et-source-card code,
+.et-claim-card span,
+.et-claim-card strong,
+.et-claim-card code,
+.et-outcome-card > span,
+.et-outcome-card code,
+.et-runtime-note span,
+.et-runtime-note code,
+.et-route {
+  font-family: 'SFMono-Regular', Consolas, monospace;
+  font-size: 9px;
+}
+
+.et-header span {
+  color: var(--et-blue);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.et-header h1 {
+  max-width: 760px;
+  margin: 12px 0 0;
+  font-size: clamp(38px, 5vw, 68px);
+  font-weight: 650;
+  letter-spacing: -0.055em;
+  line-height: 1;
+}
+
+.et-header > p {
+  margin: 0;
+  padding-left: 24px;
+  border-left: 1px solid var(--et-line);
+  color: #566375;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.et-route {
+  display: grid;
+  height: 46px;
+  align-items: center;
+  color: #7e8997;
+  grid-template-columns: 1fr 50px 1fr 50px 1fr;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.et-route i {
+  position: relative;
+  height: 1px;
+  background: var(--et-orange);
+}
+
+.et-route i::after {
+  position: absolute;
+  top: -3px;
+  right: 0;
+  width: 6px;
+  height: 6px;
+  border-top: 1px solid var(--et-orange);
+  border-right: 1px solid var(--et-orange);
+  content: '';
+  transform: rotate(45deg);
+}
+
+.et-lanes {
+  display: grid;
+  border: 1px solid var(--et-line);
+  background: rgb(255 255 255 / 76%);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.et-lane {
+  min-width: 0;
+  border-right: 1px solid var(--et-line);
+}
+
+.et-lane:last-child {
+  border-right: 0;
+}
+
+.et-lane > header {
+  display: flex;
+  min-height: 64px;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--et-line);
+}
+
+.et-lane > header > span {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid #bbc5d0;
+  border-radius: 50%;
+  color: #7f8b99;
+}
+
+.et-lane > header > div {
+  display: grid;
+  gap: 2px;
+}
+
+.et-lane > header strong {
+  font-size: 12px;
+}
+
+.et-lane > header small {
+  color: #8b95a2;
+}
+
+.et-card-stack {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+}
+
+.et-source-card,
+.et-claim-card,
+.et-outcome-card {
+  position: relative;
+  width: 100%;
+  min-height: 126px;
+  padding: 14px;
+  overflow: hidden;
+  border: 1px solid var(--et-line);
+  border-radius: 3px;
+  background: #ffffff;
+  text-align: left;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.et-source-card::before,
+.et-outcome-card::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 3px;
+  background: transparent;
+  content: '';
+}
+
+.et-source-card.is-active,
+.et-outcome-card.is-active {
+  border-color: rgb(237 119 67 / 55%);
+  box-shadow: 0 8px 24px rgb(23 34 49 / 7%);
+}
+
+.et-source-card.is-active::before,
+.et-outcome-card.is-active::before {
+  background: var(--et-orange);
+}
+
+.et-source-card > div,
+.et-claim-card > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.et-source-card span,
+.et-claim-card span,
+.et-outcome-card > span {
+  color: #7e8998;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.et-source-card code,
+.et-claim-card code,
+.et-outcome-card code {
+  color: #8793a2;
+}
+
+.et-source-card h2,
+.et-outcome-card h2 {
+  margin: 11px 0 0;
+  font-size: 14px;
+}
+
+.et-source-card p,
+.et-outcome-card p {
+  margin: 6px 0 0;
+  color: #647184;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.et-claim-card {
+  appearance: none;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+}
+
+.et-claim-card:hover {
+  border-color: #aab6c5;
+  transform: translateY(-1px);
+}
+
+.et-claim-card:focus-visible {
+  outline: 2px solid var(--et-blue);
+  outline-offset: 2px;
+}
+
+.et-claim-card.is-active {
+  border-color: var(--et-blue);
+  box-shadow: 0 9px 28px rgb(49 91 232 / 13%);
+}
+
+.et-claim-card.is-active::after {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 3px;
+  background: var(--et-blue);
+  content: '';
+}
+
+.et-claim-card strong {
+  color: var(--et-blue);
+  font-weight: 500;
+}
+
+.et-claim-card h2 {
+  margin: 12px 0 16px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.et-claim-card footer,
+.et-outcome-card footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.et-claim-card footer code,
+.et-outcome-card footer code {
+  padding: 3px 5px;
+  border-radius: 2px;
+  background: #f0f3f7;
+  font-size: 8px;
+}
+
+.et-outcome-card.et-accepted > span {
+  color: var(--et-green);
+}
+
+.et-outcome-card.et-testing > span {
+  color: var(--et-blue);
+}
+
+.et-outcome-card.et-deferred > span {
+  color: var(--et-orange);
+}
+
+.et-runtime-note {
+  display: grid;
+  gap: 7px;
+  margin: 10px;
+  padding: 14px;
+  border: 1px dashed #aeb9c6;
+  background: #f3f6fa;
+}
+
+.et-runtime-note span {
+  color: #7c8795;
+  text-transform: uppercase;
+}
+
+.et-runtime-note code {
+  color: var(--et-blue);
+  font-size: 10px;
+}
+
+@media (max-width: 1050px) {
+  .oa-evidence-trace {
+    padding: 22px;
+  }
+
+  .et-header {
+    grid-template-columns: 1fr 320px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .et-source-card,
+  .et-claim-card,
+  .et-outcome-card {
+    transition: none;
+  }
+}

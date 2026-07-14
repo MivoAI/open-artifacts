@@ -8,6 +8,12 @@
       "path": "./apps/web"
     },
     {
+      "path": "./packages/render-decision-board"
+    },
+    {
+      "path": "./packages/render-evidence-trace"
+    },
+    {
       "path": "./packages/config"
     },
     {

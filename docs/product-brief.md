@@ -2,85 +2,98 @@
 
 ## Product thesis
 
-Large models can generate more information than people can absorb as linear text. Open Artifacts
-compiles structured model output into portable, high-density web artifacts that people can scan,
-inspect, annotate, and send back to the model as precise change requests.
+Large models can generate more information than people can absorb as linear text. Open Artifacts lets
+AI return a purpose-built, high-density React page without turning every response into an opaque
+generated website.
 
-The product is not another chat UI, page builder, or AI website generator. It is the lifecycle above
-renderers: package, template selection, controlled execution, semantic annotation, patch, and version.
-See the [primary-source landscape](research/landscape.md) for the supporting analysis.
+The durable unit is a **source-published Render Package**. It owns the React implementation, input
+schema, example, styles, assets, and npm dependencies. The AI normally emits only the package's
+Render Input JSON. A developer can copy the package source locally and fork it without rebuilding the
+page from screenshots or compiled output.
 
-## First user and job
+## Three distinct objects
 
-The first user is someone using an AI agent for research, analysis, planning, or technical decisions.
-Their job is:
+| Object         | Owns                                                             | Does not own                        |
+| -------------- | ---------------------------------------------------------------- | ----------------------------------- |
+| Render Package | React source, layout, interaction, schema, example, dependencies | A particular AI response            |
+| Render Input   | JSON content for one render                                      | React code or dependency choices    |
+| Host           | Package discovery, input editing, mounting, error isolation      | Package-specific data meaning or UI |
 
-> Turn a large answer into something I can understand in one minute, interrogate at the exact point
-> of disagreement, and revise without restating the surrounding context.
+Annotation, collaboration, persistence, and model orchestration may be host capabilities later. They
+are not required Render Package props.
 
 ## Core loop
 
 ```mermaid
 flowchart LR
-    A[AI produces Artifact Package] --> B[Validate manifest and input]
-    B --> C[Choose semantic template]
-    C --> D[Render high-density artifact]
-    D --> E[Select element, text, or region]
-    E --> F[Annotation with stable semantic target]
-    F --> G[AI returns validated patch]
-    G --> H[New artifact revision]
-    H --> D
+    A[Choose source Render Package] --> B[AI emits schema-shaped JSON]
+    B --> C[Host validates and mounts]
+    C --> D[Package renders with React and its own dependencies]
+    D --> E{Need a different expression?}
+    E -->|content| B
+    E -->|implementation| F[Copy package source and fork]
+    F --> A
 ```
 
-## Product boundary
+## First user and job
 
-An Artifact Package is the durable unit. At minimum it declares:
+The first user is an AI builder or developer working with research, analysis, planning, or technical
+decisions:
 
-- package version, artifact identity, and revision;
-- renderer kind, template identity, and template version;
-- input schema and validated data;
-- capabilities and trust level;
-- generation provenance and edit policy.
+> Give the model a reliable visual language for a task, let it fill that language with JSON, and let
+> me own and fork the React implementation when the template needs to evolve.
 
-The same lifecycle can later host two renderer channels:
+## Render Package v0 boundary
 
-1. A safe structured channel using trusted components and validated data.
-2. A sandboxed code channel using HTML or a locked framework bundle.
+The format builds on npm instead of creating a parallel package system:
 
-The v0 prototype only implements the structured channel. That is intentional: it tests whether
-semantic layout plus addressable feedback is valuable before adding arbitrary package execution.
+- `package.json` is the canonical identity, version, exports, files, and dependency manifest;
+- `src/index.tsx` default-exports `Render({ data })`;
+- `input.schema.json` describes the JSON the model should produce;
+- `example.json` makes every package previewable immediately;
+- `tsconfig.json` is standalone and published with the source;
+- source is the package export and must be included in the published files;
+- React is a peer dependency; implementation libraries belong to the package;
+- package source must not import the host or a sibling render.
 
-## Prototype question
+The v0 host discovers trusted local packages under `packages/render-*` and loads their public npm
+exports. It is intentionally in-process and does not claim sandbox, permission, CSS, DOM, storage, or
+network isolation.
 
-> Can one stable data package drive genuinely different high-density views while preserving the same
-> semantic annotation target and producing feedback JSON an AI can act on?
+## Current proof
 
-The current prototype uses one package, three render structures, live JSON editing, ECharts as a real
-third-party renderer dependency, and click-to-annotate feedback. Run it with `npm run dev`.
+The workbench loads two adapters through the same seam:
 
-The current package shape is captured as a reviewable draft in
-[`docs/spec/artifact-package.v0.1.schema.json`](spec/artifact-package.v0.1.schema.json).
+1. `decision-board` renders a dense dashboard and owns ECharts.
+2. `evidence-trace` uses a different input schema and interactive plain React UI.
+
+The host only sees a default component and example JSON. Contract tests verify source exports,
+package-local schema/example resources, React peer dependency, and server rendering through the npm
+package interface.
 
 ## Success signals
 
-- A reader can identify the main conclusion, evidence, risk, and next action within 60 seconds.
-- Switching renderer structure does not change annotation target paths.
-- A user can point at a visible claim and produce a complete feedback payload without describing its
-  screen position in prose.
-- Invalid JSON never replaces the last valid render.
-- The same package can be rendered deterministically after reload.
+- Copying a package directory requires no host registry edit.
+- A package can introduce a React ecosystem dependency without adding it to the host.
+- The published npm file list includes editable TSX, CSS, schema, example, README, and standalone
+  TypeScript config.
+- One host mounts packages with different data models through `Render({ data })`.
+- Invalid JSON does not replace the last syntactically valid render.
+- A developer can find all implementation knowledge inside the copied package directory.
 
 ## Explicit non-goals for v0
 
-- Calling a model or designing prompt orchestration.
-- Running arbitrary generated JavaScript or installing runtime dependencies.
-- A hosted registry, accounts, collaboration, persistence, or billing.
-- Claiming the draft package shape is a public standard before real usage validates it.
+- Annotation as a required render interface.
+- Running unknown or untrusted packages safely.
+- A Host SDK, theme context, action bus, capability negotiation, or remote RPC.
+- Hosted registry, accounts, collaboration, persistence, or billing.
+- Model calls, prompt orchestration, streaming patches, or eval claims.
+- Supporting every bundler; v0 targets React source consumed by Vite.
 
-## Next validation after this prototype
+## Next validation
 
-1. Add text selection and free-area box selection alongside semantic element selection.
-2. Return RFC 6902-compatible data patches and preview them before applying.
-3. Compare a long-text answer with four semantic templates: comparison, timeline, evidence matrix,
-   and decision matrix.
-4. Measure find time, comparison accuracy, and number of revision turns.
+1. Fork one reference package into a third package and measure the exact edits needed.
+2. Validate example JSON against each package's JSON Schema in the host.
+3. Add source maps or file navigation so a visible panel can jump to its package source.
+4. Test source-package installation from an npm tarball, not only a workspace directory.
+5. Only after two renders need the same host capability, design that optional seam.

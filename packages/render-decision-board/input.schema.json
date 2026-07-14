@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://open-artifacts.dev/render-packages/decision-board/input.schema.json",
+  "title": "Decision Board input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["meta", "metrics", "claims", "steps", "actions"],
+  "properties": {
+    "meta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["eyebrow", "title", "question", "summary", "tags"],
+      "properties": {
+        "eyebrow": { "type": "string" },
+        "title": { "type": "string" },
+        "question": { "type": "string" },
+        "summary": { "type": "string" },
+        "tags": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "metrics": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "label", "value", "unit", "note", "trend"],
+        "properties": {
+          "id": { "type": "string" },
+          "label": { "type": "string" },
+          "value": { "type": "number" },
+          "unit": { "type": "string" },
+          "note": { "type": "string" },
+          "trend": { "type": "array", "items": { "type": "number" }, "minItems": 2 }
+        }
+      }
+    },
+    "claims": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "kind", "title", "body", "confidence", "evidence"],
+        "properties": {
+          "id": { "type": "string" },
+          "kind": { "enum": ["signal", "principle", "risk"] },
+          "title": { "type": "string" },
+          "body": { "type": "string" },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+          "evidence": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "steps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["label", "title", "detail", "state"],
+        "properties": {
+          "label": { "type": "string" },
+          "title": { "type": "string" },
+          "detail": { "type": "string" },
+          "state": { "enum": ["done", "active", "next"] }
+        }
+      }
+    },
+    "actions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["title", "detail", "owner", "state"],
+        "properties": {
+          "title": { "type": "string" },
+          "detail": { "type": "string" },
+          "owner": { "type": "string" },
+          "state": { "enum": ["ready", "watch", "later"] }
+        }
+      }
+    }
+  }
+}

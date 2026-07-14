@@ -1,0 +1,83 @@
+{
+  "title": "一条输入如何变成可 fork 的 React 页面",
+  "summary": "点击中间的判断，查看它依赖哪些输入，以及最终支撑了哪些格式决策。交互逻辑完全属于这个 Render Package。",
+  "sources": [
+    {
+      "id": "founder-correction",
+      "type": "brief",
+      "label": "产品核心修正",
+      "detail": "核心不是标注，而是 package 本身就是 render。"
+    },
+    {
+      "id": "react-ecosystem",
+      "type": "constraint",
+      "label": "React 生态复用",
+      "detail": "Render 必须能自由引入图表、布局与交互依赖。"
+    },
+    {
+      "id": "local-fork",
+      "type": "constraint",
+      "label": "本地源码 fork",
+      "detail": "用户拿到 package 后应能直接读、改和继续运行。"
+    },
+    {
+      "id": "two-adapters",
+      "type": "test",
+      "label": "两个真实实现",
+      "detail": "同一个宿主 seam 同时承载完全不同的数据结构和界面。"
+    }
+  ],
+  "claims": [
+    {
+      "id": "npm-is-manifest",
+      "label": "格式判断",
+      "statement": "package.json 已经能表达身份、版本、源码入口与依赖，不需要第二份 manifest。",
+      "confidence": 0.96,
+      "sourceIds": ["founder-correction", "local-fork"]
+    },
+    {
+      "id": "one-prop",
+      "label": "接口判断",
+      "statement": "默认 React export 只接收 data，就足以隐藏复杂页面的全部实现。",
+      "confidence": 0.94,
+      "sourceIds": ["react-ecosystem", "two-adapters"]
+    },
+    {
+      "id": "package-locality",
+      "label": "工程判断",
+      "statement": "schema、example、CSS 和第三方依赖都应与 Render 源码保持 locality。",
+      "confidence": 0.93,
+      "sourceIds": ["react-ecosystem", "local-fork"]
+    },
+    {
+      "id": "annotation-overlay",
+      "label": "边界判断",
+      "statement": "标注可以以后由宿主叠加，但不能污染 Render Package 的必需接口。",
+      "confidence": 0.91,
+      "sourceIds": ["founder-correction"]
+    }
+  ],
+  "outcomes": [
+    {
+      "id": "source-format",
+      "title": "采用 source-first package v0",
+      "detail": "npm package 直接导出 TSX source、schema 与 example。",
+      "state": "accepted",
+      "claimIds": ["npm-is-manifest", "one-prop", "package-locality"]
+    },
+    {
+      "id": "workspace-discovery",
+      "title": "自动发现 packages/render-*",
+      "detail": "复制目录不会要求开发者维护宿主 registry。",
+      "state": "testing",
+      "claimIds": ["npm-is-manifest", "package-locality"]
+    },
+    {
+      "id": "host-sdk",
+      "title": "暂不设计 Host SDK",
+      "detail": "等两个 package 出现同一宿主能力需求后再增加 seam。",
+      "state": "deferred",
+      "claimIds": ["one-prop", "annotation-overlay"]
+    }
+  ]
+}

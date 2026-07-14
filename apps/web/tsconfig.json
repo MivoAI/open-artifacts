@@ -13,5 +13,9 @@
     "tsBuildInfoFile": "dist/tsconfig.tsbuildinfo",
     "types": ["vite/client"]
   },
-  "include": ["src/**/*"]
+  "include": ["src/**/*"],
+  "references": [
+    { "path": "../../packages/render-decision-board" },
+    { "path": "../../packages/render-evidence-trace" }
+  ]
 }

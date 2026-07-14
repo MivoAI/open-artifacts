@@ -1,13 +1,8 @@
-# Open Artifacts web prototype
+# Open Artifacts web host
 
-This Vite + React app is a throwaway UI prototype for the first Open Artifacts product question: can
-one structured package produce multiple high-density views and stable, AI-readable annotations?
+This Vite app is intentionally a thin local host. At startup its Vite plugin discovers
+`packages/render-*`, then loads each package's manifest, schema, example, and default React source
+through public npm exports before mounting `<Render data={input} />`.
 
-Run it from the repository root:
-
-```bash
-npm run dev
-```
-
-Use `?variant=atlas`, `?variant=brief`, or `?variant=trace`. The floating switcher is development-only.
-Read [`src/prototype/NOTES.md`](src/prototype/NOTES.md) before promoting any prototype code.
+Package-specific layouts, types, styles, and visualization dependencies do not belong here. The host
+owns only catalog UI, JSON editing, URL selection, error isolation, and the React runtime.
