@@ -59,3 +59,17 @@ lint -> test -> e2e
 - `packages/utils`: small framework-agnostic utilities.
 
 Keep features close to the app that owns them. Extract into `packages/*` only when code is reused or represents a stable boundary.
+
+## Agent skills
+
+### Issue tracker
+
+Issues and PRDs live as GitHub issues in `MivoAI/open-artifacts`. External PRs are treated as a triage surface. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five canonical triage roles use their default label strings: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: one `CONTEXT.md` at the repo root with `docs/adr/` for architectural decisions. See `docs/agents/domain.md`.
