@@ -1,13 +1,13 @@
-# Onee Product Template
+# Voyage
 
-This repository is a public GitHub template for npm-workspace TypeScript projects.
+Voyage is an npm-workspace TypeScript project.
 
 The template intentionally leaves `apps/web` empty. Choose Next.js, Vite, Astro, Remix, or another web stack when a real project needs one.
 
 ## Structure
 
 ```text
-onee-product-template/
+voyage/
 ├── apps/
 │   ├── android/             # Empty Android app slot; choose a stack later
 │   ├── ios/                 # Empty iOS app slot; choose a stack later

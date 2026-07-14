@@ -1,7 +1,7 @@
 {
-  "name": "onee-product-template",
+  "name": "voyage",
   "version": "0.1.0",
-  "description": "A public GitHub template repository for npm-workspace TypeScript projects.",
+  "description": "Voyage workspace.",
   "private": true,
   "type": "module",
   "workspaces": [
