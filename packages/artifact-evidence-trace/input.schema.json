@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://open-artifacts.dev/render-packages/evidence-trace/input.schema.json",
+  "$id": "https://open-artifacts.dev/artifact-packages/evidence-trace/input.schema.json",
   "title": "Evidence Trace input",
   "type": "object",
   "additionalProperties": false,

@@ -2,16 +2,13 @@
   "files": [],
   "references": [
     {
-      "path": "./apps/server"
-    },
-    {
       "path": "./apps/web"
     },
     {
-      "path": "./packages/render-decision-board"
+      "path": "./packages/artifact-decision-board"
     },
     {
-      "path": "./packages/render-evidence-trace"
+      "path": "./packages/artifact-evidence-trace"
     },
     {
       "path": "./packages/config"

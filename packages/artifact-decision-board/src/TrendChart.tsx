@@ -57,5 +57,7 @@ export function TrendChart({ metrics }: TrendChartProps) {
     };
   }, [metrics]);
 
-  return <div className="db-trend-chart" ref={root} aria-label="Render Package contract trends" />;
+  return (
+    <div className="db-trend-chart" ref={root} aria-label="Artifact Package contract trends" />
+  );
 }

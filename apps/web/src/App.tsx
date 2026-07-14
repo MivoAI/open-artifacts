@@ -1,15 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import { RenderErrorBoundary } from './RenderErrorBoundary.tsx';
-import { renderPackages } from './render-registry.ts';
+import { artifactPackages } from './artifact-registry.ts';
 
 function packageFromLocation(): string {
   const parameters = new URLSearchParams(window.location.search);
   const requested = parameters.get('render');
-  if (requested && renderPackages.some((item) => item.slug === requested)) return requested;
+  if (requested && artifactPackages.some((item) => item.slug === requested)) return requested;
 
   if (parameters.get('variant') === 'trace') return 'evidence-trace';
-  return renderPackages[0]?.slug ?? '';
+  return artifactPackages[0]?.slug ?? '';
 }
 
 function sourceFor(value: unknown): string {
@@ -19,7 +19,7 @@ function sourceFor(value: unknown): string {
 export function App() {
   const [activeSlug, setActiveSlug] = useState(packageFromLocation);
   const activePackage = useMemo(
-    () => renderPackages.find((item) => item.slug === activeSlug) ?? renderPackages[0],
+    () => artifactPackages.find((item) => item.slug === activeSlug) ?? artifactPackages[0],
     [activeSlug],
   );
   const [source, setSource] = useState(() => sourceFor(activePackage?.example));
@@ -31,7 +31,7 @@ export function App() {
   useEffect(() => {
     function syncFromLocation() {
       const nextSlug = packageFromLocation();
-      const nextPackage = renderPackages.find((item) => item.slug === nextSlug);
+      const nextPackage = artifactPackages.find((item) => item.slug === nextSlug);
       if (!nextPackage) return;
       setActiveSlug(nextSlug);
       setSource(sourceFor(nextPackage.example));
@@ -46,14 +46,14 @@ export function App() {
 
   if (!activePackage) {
     return (
-      <main className="empty-runtime">No Render Packages found under `packages/render-*`.</main>
+      <main className="empty-runtime">No Artifact Packages found under `packages/artifact-*`.</main>
     );
   }
 
   const selectedPackage = activePackage;
 
   function selectPackage(slug: string) {
-    const nextPackage = renderPackages.find((item) => item.slug === slug);
+    const nextPackage = artifactPackages.find((item) => item.slug === slug);
     if (!nextPackage) return;
 
     const url = new URL(window.location.href);
@@ -87,7 +87,7 @@ export function App() {
   }
 
   async function copyForkCommand() {
-    const command = `cp -R packages/${selectedPackage.directory} packages/render-my-render`;
+    const command = `cp -R packages/${selectedPackage.directory} packages/artifact-my-artifact`;
     try {
       await navigator.clipboard.writeText(command);
       setCopyLabel('已复制');
@@ -106,14 +106,14 @@ export function App() {
           <span className="brand-mark">OA</span>
           <div>
             <strong>Open Artifacts</strong>
-            <small>source render workbench</small>
+            <small>source artifact workbench</small>
           </div>
         </div>
 
         <div className="execution-seam" aria-label="Runtime interface">
-          <span>package source</span>
+          <span>Artifact Source</span>
           <i />
-          <span>JSON data</span>
+          <span>Artifact Input</span>
           <i />
           <strong>{'<Render />'}</strong>
         </div>
@@ -130,13 +130,13 @@ export function App() {
           <div className="panel-title">
             <div>
               <span>01 / source</span>
-              <strong>Render Packages</strong>
+              <strong>Artifact Packages</strong>
             </div>
-            <code>{renderPackages.length}</code>
+            <code>{artifactPackages.length}</code>
           </div>
 
-          <nav className="package-list" aria-label="Render Packages">
-            {renderPackages.map((item) => (
+          <nav className="package-list" aria-label="Artifact Packages">
+            {artifactPackages.map((item) => (
               <button
                 className={item.slug === selectedPackage.slug ? 'is-active' : ''}
                 key={item.slug}
@@ -208,7 +208,7 @@ export function App() {
           <div className="panel-title">
             <div>
               <span>03 / input</span>
-              <strong>Render Input</strong>
+              <strong>Artifact Input</strong>
             </div>
             <button type="button" onClick={resetExample}>
               恢复 example

@@ -5,14 +5,14 @@
 ```text
 apps/*       = runnable hosts and services
 packages/*   = reusable libraries with demonstrated cross-package value
-packages/render-* = source-published React Render Packages
+packages/artifact-* = source-published Artifact Packages
 e2e/*        = package format and assembled runtime tests
 evals/*      = evaluations that call real models
 docs/*       = durable product and format knowledge
 scripts/*    = local automation
 ```
 
-`packages/render-*` follows the repository's reusable-package boundary. Each matching directory is
+`packages/artifact-*` follows the repository's reusable-package boundary. Each matching directory is
 an independent publication and fork boundary.
 
 ## Runtime seam
@@ -20,7 +20,7 @@ an independent publication and fork boundary.
 ```mermaid
 sequenceDiagram
     participant Host as Vite Host
-    participant Package as Render Package
+    participant Package as Artifact Package
     participant React as React Runtime
 
     Host->>Package: discover package.json + public npm exports
@@ -37,14 +37,14 @@ package.
 
 ## Discovery
 
-At startup, a concrete Vite plugin scans `packages/render-*` manifests and builds a virtual catalog
+At startup, a concrete Vite plugin scans `packages/artifact-*` manifests and builds a virtual catalog
 whose imports use four public npm exports:
 
 ```text
-@scope/render-name
-@scope/render-name/schema
-@scope/render-name/example
-@scope/render-name/package.json
+@scope/name
+@scope/name/schema
+@scope/name/example
+@scope/name/package.json
 ```
 
 This is a concrete local implementation, not an abstract registry port. Copying a package requires
@@ -54,9 +54,9 @@ registry should introduce a new adapter only when it exists.
 ## Dependency ownership
 
 - The host owns React and ReactDOM.
-- A Render Package lists React as a peer dependency.
-- Each Render Package owns its visualization, state, layout, and asset dependencies.
-- Render Packages do not import `apps/web`, sibling renders, or hidden workspace helpers.
+- An Artifact Package lists React as a peer dependency.
+- Each Artifact Package owns its visualization, state, layout, and asset dependencies.
+- Artifact Packages do not import `apps/web`, sibling renders, or hidden workspace helpers.
 - No shared render UI package exists until two real packages need the same implementation.
 
 `decision-board` and `evidence-trace` are two concrete adapters on the same seam, so the interface is

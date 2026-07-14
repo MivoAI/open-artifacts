@@ -100,7 +100,7 @@ export default function DecisionBoard({ data }: DecisionBoardProps) {
             </div>
             <TrendChart metrics={data.metrics} />
             <p className="db-chart-note">
-              宿主没有图表依赖；这个 Render Package 自己声明、渲染并清理 ECharts。
+              宿主没有图表依赖；这个 Artifact Package 自己声明、渲染并清理 ECharts。
             </p>
           </div>
 

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://open-artifacts.dev/schemas/render-package/v0.json",
-  "title": "Open Artifacts React Render Package v0 npm manifest",
+  "$id": "https://open-artifacts.dev/schemas/artifact-package/v0.json",
+  "title": "Open Artifacts Artifact Package manifest for react-render/v0",
   "type": "object",
   "required": ["name", "version", "type", "files", "exports", "openArtifacts", "peerDependencies"],
   "properties": {

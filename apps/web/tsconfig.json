@@ -15,7 +15,7 @@
   },
   "include": ["src/**/*"],
   "references": [
-    { "path": "../../packages/render-decision-board" },
-    { "path": "../../packages/render-evidence-trace" }
+    { "path": "../../packages/artifact-decision-board" },
+    { "path": "../../packages/artifact-evidence-trace" }
   ]
 }

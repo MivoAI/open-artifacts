@@ -12,10 +12,10 @@ TypeScript configuration, schema, and example are all local to the directory.
 From the Open Artifacts repository root:
 
 ```bash
-cp -R packages/render-evidence-trace packages/render-my-trace
+cp -R packages/artifact-evidence-trace packages/artifact-my-trace
 ```
 
-Rename the copied npm package to `@open-artifacts/render-my-trace`, run `npm install` from the
+Rename the copied npm package to `@open-artifacts/my-trace`, run `npm install` from the
 repository root, and restart the workbench. The Host discovers the package from its npm manifest and
 loads its public exports; no registry edit is required.
 

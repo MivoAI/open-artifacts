@@ -5,7 +5,7 @@ import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 import type { Plugin } from 'vite';
 
-const virtualCatalogId = 'virtual:open-artifacts-render-packages';
+const virtualCatalogId = 'virtual:open-artifacts-artifact-packages';
 const resolvedVirtualCatalogId = `\0${virtualCatalogId}`;
 const packagesRoot = fileURLToPath(new URL('../../packages/', import.meta.url));
 
@@ -16,17 +16,17 @@ interface WorkspacePackageManifest {
   };
 }
 
-function sourceRenderPackageCatalog(): Plugin {
+function sourceArtifactPackageCatalog(): Plugin {
   return {
-    name: 'open-artifacts-source-render-catalog',
+    name: 'open-artifacts-source-package-catalog',
     resolveId(id) {
       return id === virtualCatalogId ? resolvedVirtualCatalogId : undefined;
     },
     load(id) {
       if (id !== resolvedVirtualCatalogId) return undefined;
 
-      const renderPackages = readdirSync(packagesRoot, { withFileTypes: true })
-        .filter((entry) => entry.isDirectory() && entry.name.startsWith('render-'))
+      const artifactPackages = readdirSync(packagesRoot, { withFileTypes: true })
+        .filter((entry) => entry.isDirectory() && entry.name.startsWith('artifact-'))
         .map((entry) => {
           const manifest = JSON.parse(
             readFileSync(`${packagesRoot}/${entry.name}/package.json`, 'utf8'),
@@ -36,8 +36,8 @@ function sourceRenderPackageCatalog(): Plugin {
         .filter(({ manifest }) => manifest.openArtifacts?.format === 'react-render/v0')
         .sort((left, right) => left.directory.localeCompare(right.directory));
 
-      const imports = renderPackages.flatMap(({ manifest }, index) => {
-        if (!manifest.name) throw new Error('Render Package is missing its npm name');
+      const imports = artifactPackages.flatMap(({ manifest }, index) => {
+        if (!manifest.name) throw new Error('Artifact Package is missing its npm name');
         const packageName = JSON.stringify(manifest.name);
         return [
           `import Render${index} from ${packageName};`,
@@ -47,7 +47,7 @@ function sourceRenderPackageCatalog(): Plugin {
         ];
       });
 
-      const entries = renderPackages.map(
+      const entries = artifactPackages.map(
         ({ directory }, index) =>
           `{ directory: ${JSON.stringify(directory)}, Render: Render${index}, example: example${index}, schema: schema${index}, manifest: manifest${index} }`,
       );
@@ -58,5 +58,5 @@ function sourceRenderPackageCatalog(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [sourceRenderPackageCatalog(), react()],
+  plugins: [sourceArtifactPackageCatalog(), react()],
 });

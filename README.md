@@ -1,13 +1,13 @@
 # Open Artifacts
 
-Open Artifacts is a source-first format and local workbench for React renders. A **Render Package is
+Open Artifacts is a source-first format and local workbench for React renders. An **Artifact Package is
 the renderer itself**: editable TSX source, npm dependencies, styles, an input schema, and example
 JSON published together as one ordinary npm package.
 
 The model is deliberately small:
 
 ```text
-Render Package (source) + Render Input (JSON) -> React page
+Artifact Package (source) + Artifact Input (JSON) -> React page
 ```
 
 Annotation is not part of the required package interface. A host may add it later as an overlay.
@@ -19,7 +19,7 @@ npm install
 npm run dev
 ```
 
-The workbench discovers source packages under `packages/render-*` from their npm manifests. It
+The workbench discovers source packages under `packages/artifact-*` from their npm manifests. It
 currently includes:
 
 - `decision-board` — a high-density dashboard that owns its ECharts dependency;
@@ -28,10 +28,10 @@ currently includes:
 Edit the JSON on the right to update the selected render immediately. Switch packages on the left to
 prove that the host does not know either input model or visual implementation.
 
-## Render Package v0
+## Artifact Package contract
 
 ```text
-packages/render-my-render/
+packages/artifact-my-render/
 ├── package.json
 ├── README.md
 ├── input.schema.json
@@ -66,17 +66,17 @@ export default function Render({ data }: { data: MyInput }) {
 ```
 
 React is a peer dependency supplied by the host. ECharts, React Flow, TanStack Table, Three.js, or
-other implementation dependencies belong to the Render Package that uses them.
+other implementation dependencies belong to the Artifact Package that uses them.
 
-See [`docs/render-package-format.md`](docs/render-package-format.md) for the normative v0 contract.
+See [`docs/artifact-package-format.md`](docs/artifact-package-format.md) for the normative v0 contract.
 
 ## Fork a render
 
 ```bash
-cp -R packages/render-decision-board packages/render-my-render
+cp -R packages/artifact-decision-board packages/artifact-my-render
 ```
 
-Change the copied `package.json` name to `@open-artifacts/render-my-render`, then edit `src/index.tsx`,
+Change the copied `package.json` name to `@open-artifacts/my-artifact`, then edit `src/index.tsx`,
 `input.schema.json`, and `example.json`. Run `npm install` and restart the workbench; its Vite plugin
 discovers the npm manifest and loads public package exports without a manual registry entry.
 
@@ -85,7 +85,7 @@ discovers the npm manifest and loads public package exports without a manual reg
 ```text
 open-artifacts/
 ├── apps/web/                # Thin discovery, JSON input, and mount host
-├── packages/render-*/       # Forkable source Render Packages
+├── packages/artifact-*/     # Forkable source Artifact Packages
 ├── packages/                # Other reusable libraries and infrastructure
 ├── e2e/                     # Package format and public runtime contract tests
 ├── docs/                    # Product, architecture, and format decisions

@@ -1,7 +1,7 @@
 # Open Artifacts web host
 
 This Vite app is intentionally a thin local host. At startup its Vite plugin discovers
-`packages/render-*`, then loads each package's manifest, schema, example, and default React source
+`packages/artifact-*`, then loads each package's manifest, schema, example, and default React source
 through public npm exports before mounting `<Render data={input} />`.
 
 Package-specific layouts, types, styles, and visualization dependencies do not belong here. The host

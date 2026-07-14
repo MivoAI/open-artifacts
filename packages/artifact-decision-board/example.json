@@ -1,9 +1,9 @@
 {
   "meta": {
-    "eyebrow": "Render Package / decision-board",
+    "eyebrow": "Artifact Package / decision-board",
     "title": "Package 本身就是可执行的 React 源码",
     "question": "怎样让 AI 用高信息密度呈现内容，同时让开发者能在本地直接 fork？",
-    "summary": "把 Render Package 定义成普通 npm 源码包。AI 只生成符合该 package schema 的 JSON；package 自己拥有 React 页面、样式与第三方依赖，宿主只负责发现、输入与挂载。",
+    "summary": "把 Artifact Package 定义成普通 npm 源码包。AI 只生成符合该 package schema 的 JSON；package 自己拥有 React 页面、样式与第三方依赖，宿主只负责发现、输入与挂载。",
     "tags": ["source-first", "React", "forkable", "npm-native"]
   },
   "metrics": [
@@ -44,7 +44,7 @@
     {
       "id": "package-is-render",
       "kind": "principle",
-      "title": "Render Package 不是 renderer 的配置引用",
+      "title": "Artifact Package 不是 renderer 的配置引用",
       "body": "默认导出就是 React component；schema、example、CSS 和组件树都和它放在同一个源码目录里。",
       "confidence": 0.98,
       "evidence": ["package.json exports", "src/index.tsx"]
@@ -77,13 +77,13 @@
   "steps": [
     {
       "label": "01",
-      "title": "选择 Render Package",
-      "detail": "宿主从 packages/render-* 的 manifest 自动发现源码包。",
+      "title": "选择 Artifact Package",
+      "detail": "宿主从 packages/artifact-* 的 manifest 自动发现源码包。",
       "state": "done"
     },
     {
       "label": "02",
-      "title": "AI 生成 Render Input",
+      "title": "AI 生成 Artifact Input",
       "detail": "JSON 由 package 自己的 schema 约束。",
       "state": "done"
     },
@@ -109,7 +109,7 @@
     },
     {
       "title": "验证真实生态依赖",
-      "detail": "让依赖只出现在使用它的 Render Package 中。",
+      "detail": "让依赖只出现在使用它的 Artifact Package 中。",
       "owner": "Runtime",
       "state": "ready"
     },

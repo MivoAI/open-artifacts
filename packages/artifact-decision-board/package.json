@@ -1,7 +1,7 @@
 {
-  "name": "@open-artifacts/render-evidence-trace",
+  "name": "@open-artifacts/decision-board",
   "version": "0.1.0",
-  "description": "An interactive evidence-to-decision trace rendered with plain React.",
+  "description": "A high-density decision dashboard with an ECharts signal view.",
   "type": "module",
   "files": [
     "src",
@@ -27,6 +27,9 @@
   },
   "peerDependencies": {
     "react": "^19.0.0"
+  },
+  "dependencies": {
+    "echarts": "^6.1.0"
   },
   "devDependencies": {
     "@types/react": "^19.2.17",

@@ -1,14 +1,14 @@
-# React Render Package format v0
+# Artifact Package format for `react-render/v0`
 
 Status: working draft implemented by the local Open Artifacts workbench.
 
 ## 1. Package identity
 
-A Render Package MUST be an npm package. `package.json` is the only manifest and MUST contain:
+An Artifact Package MUST be an npm package. `package.json` is the only manifest and MUST contain:
 
 ```json
 {
-  "name": "@scope/render-example",
+  "name": "@scope/example",
   "version": "0.1.0",
   "type": "module",
   "files": ["src", "input.schema.json", "example.json", "tsconfig.json", "README.md"],
@@ -35,7 +35,7 @@ only editable implementation shipped to users.
 | Path                | Requirement                                               |
 | ------------------- | --------------------------------------------------------- |
 | `src/index.tsx`     | Default React source entry                                |
-| `input.schema.json` | JSON Schema 2020-12 for Render Input                      |
+| `input.schema.json` | JSON Schema 2020-12 for Artifact Input                    |
 | `example.json`      | Immediately previewable JSON input                        |
 | `tsconfig.json`     | Standalone TypeScript configuration for a local fork      |
 | `README.md`         | Package purpose, data shape, dependencies, and fork notes |
@@ -61,7 +61,7 @@ allowed.
 - `react` MUST be a peer dependency and MUST NOT appear in `dependencies`.
 - Package-specific libraries MUST be declared in that package's `dependencies`.
 - Source MAY import files inside its own directory and declared npm dependencies.
-- Source MUST NOT import a Host application, sibling Render Package, or undeclared workspace module.
+- Source MUST NOT import a Host application, sibling Artifact Package, or undeclared workspace module.
 - Styles and assets SHOULD be scoped under a package-specific root to reduce in-process collisions.
 
 ## 5. Schema and example
@@ -80,7 +80,7 @@ and edit the render. A local fork changes its directory and npm name, runs `npm 
 discovered without adding a manual import to the workbench:
 
 ```bash
-cp -R packages/render-example packages/render-my-render
+cp -R packages/artifact-example packages/artifact-my-render
 ```
 
 The fork MUST rename `package.json.name` to remain unique in an npm workspace and restart the Host
@@ -100,7 +100,7 @@ A conforming package should pass all of these observable checks:
 2. npm `files` publishes those resources and a standalone TypeScript configuration.
 3. React is a peer and is not duplicated as an implementation dependency.
 4. The example can be imported and rendered through the default source export.
-5. Package source has no Host or sibling-render import.
+5. Package source has no Host or sibling Artifact Package import.
 6. Copying the directory does not require a Host registry edit.
 
-The repository enforces the first four checks in `e2e/render-package-*.test.*`.
+The repository enforces the first four checks in `e2e/artifact-package-*.test.*`.

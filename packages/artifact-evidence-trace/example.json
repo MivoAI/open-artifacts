@@ -1,6 +1,6 @@
 {
   "title": "一条输入如何变成可 fork 的 React 页面",
-  "summary": "点击中间的判断，查看它依赖哪些输入，以及最终支撑了哪些格式决策。交互逻辑完全属于这个 Render Package。",
+  "summary": "点击中间的判断，查看它依赖哪些输入，以及最终支撑了哪些格式决策。交互逻辑完全属于这个 Artifact Package。",
   "sources": [
     {
       "id": "founder-correction",
@@ -52,7 +52,7 @@
     {
       "id": "annotation-overlay",
       "label": "边界判断",
-      "statement": "标注可以以后由宿主叠加，但不能污染 Render Package 的必需接口。",
+      "statement": "标注可以以后由宿主叠加，但不能污染 Artifact Package 的必需接口。",
       "confidence": 0.91,
       "sourceIds": ["founder-correction"]
     }
@@ -67,7 +67,7 @@
     },
     {
       "id": "workspace-discovery",
-      "title": "自动发现 packages/render-*",
+      "title": "自动发现 packages/artifact-*",
       "detail": "复制目录不会要求开发者维护宿主 registry。",
       "state": "testing",
       "claimIds": ["npm-is-manifest", "package-locality"]

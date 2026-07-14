@@ -5,10 +5,10 @@
 
 > **产品结论更新（2026-07-14）：** 本文保留最初的市场证据与当时推导，但其中
 > “Artifact Manifest + renderer 引用 + Annotation-first”的建议已经被创始人修正，不再代表现行架构。
-> 当前核心是 **源码发布的 React Render Package**：npm package 本身就是 render，AI 输出它的
+> 当前核心是 **源码发布的 Artifact Package**：npm package 本身就是 render，AI 输出它的
 > JSON input，用户可以在本地直接 fork 源码。现行边界见
 > [`docs/product-brief.md`](../product-brief.md) 与
-> [`docs/render-package-format.md`](../render-package-format.md)。
+> [`docs/artifact-package-format.md`](../artifact-package-format.md)。
 
 ## 一句话结论
 

@@ -6,13 +6,13 @@
 
 ## 一句话定位
 
-> **Open Artifacts 是面向 Coding Agent 的 source-first Artifact Package Runtime。一个 `oa run` 命令把版本化 React Render Package 变成本地交互页面，一个 `oa fork` 命令把它变成用户拥有的源码。**
+> **Open Artifacts 是面向 Coding Agent 的 source-first Artifact Package Runtime。一个 `oa run` 命令把版本化 Artifact Package 变成本地交互页面，一个 `oa fork` 命令把它变成用户拥有的源码。**
 
 Open Artifacts 不负责替代 Agent 生成内容，也不负责发明另一种 Generative UI DSL。它负责 Agent 与一个可运行、可审计、可复现、可 fork 的 Web Artifact 之间缺失的本地运行层。
 
 ## 产品核心已经改变
 
-之前的实现把 Workbench 当作产品入口：它扫描 monorepo 中的 `packages/render-*`，展示 Package 列表，并把右侧 JSON 传给 React Render。
+之前的实现把 Workbench 当作产品入口：它扫描 monorepo 中的 `packages/artifact-*`，展示 Package 列表，并把右侧 JSON 传给 React Render。
 
 新的定位应当把层级倒过来：
 
@@ -24,7 +24,7 @@ Workbench          = Runtime 提供的浏览器界面
 Agent Adapter      = 帮 Agent 调用 oa 并打开 URL
 ```
 
-Workbench 仍然有价值，但它应成为 `oa run` 启动后用户看到的页面，而不是要求所有 Render Package 先加入 Open Artifacts monorepo。
+Workbench 仍然有价值，但它应成为 `oa run` 启动后用户看到的页面，而不是要求所有 Artifact Package 先加入 Open Artifacts monorepo。
 
 ## 产品承诺
 
@@ -38,7 +38,7 @@ Workbench 仍然有价值，但它应成为 `oa run` 启动后用户看到的页
 
 对 Package 作者：
 
-> 只要发布一个符合 Render Package Contract 的普通 npm 源码包，就能被不同 Agent 和本地 Host 运行，不需要绑定某家模型或聊天产品。
+> 只要发布一个符合 Artifact Package Contract 的普通 npm 源码包，就能被不同 Agent 和本地 Host 运行，不需要绑定某家模型或聊天产品。
 
 ## 核心工作流
 
@@ -57,7 +57,7 @@ sequenceDiagram
     CLI->>R: resolve manifest and tarball
     R-->>CLI: package source + integrity
     CLI->>C: cache exact package version
-    CLI->>CLI: validate Render Package contract
+    CLI->>CLI: validate Artifact Package contract
     CLI->>H: start local runtime session
     H-->>CLI: ready at loopback URL
     CLI-->>A: structured ready event + URL
@@ -70,7 +70,7 @@ sequenceDiagram
 用户可见命令：
 
 ```bash
-oa run @open-artifacts/render-decision-board@0.1.0
+oa run @open-artifacts/decision-board@0.1.0
 ```
 
 这条命令内部完成：
@@ -100,7 +100,7 @@ flowchart LR
 用户可见命令：
 
 ```bash
-oa fork @open-artifacts/render-decision-board@0.1.0 ./my-decision-board
+oa fork @open-artifacts/decision-board@0.1.0 ./my-decision-board
 cd my-decision-board
 oa run .
 ```
@@ -112,7 +112,7 @@ Fork 的语义不是 GitHub Fork，而是“把远程 Package 物化为本地、
 | 对象              | 责任                                                | 不负责                        |
 | ----------------- | --------------------------------------------------- | ----------------------------- |
 | Artifact Package  | React 源码、Schema、Example、样式、资源、依赖、版本 | 某一次用户数据和 Runtime 进程 |
-| Render Input      | 某次渲染使用的 JSON 数据                            | React 实现和依赖              |
+| Artifact Input    | 某次渲染使用的 JSON 数据                            | React 实现和依赖              |
 | Package Specifier | 指向 Package 名称、版本或本地路径                   | 保存源码副本                  |
 | Runtime Session   | Server、端口、URL、日志、进程状态                   | 长期保存源码                  |
 | Fork Workspace    | 用户拥有的完整 Package 源码                         | 自动追踪上游更新              |
@@ -123,7 +123,7 @@ Fork 的语义不是 GitHub Fork，而是“把远程 Package 物化为本地、
 v0 继续采用当前 source-first npm Contract，不另造包管理格式：
 
 ```text
-render-package/
+artifact-package/
 ├── package.json
 ├── README.md
 ├── input.schema.json
@@ -137,7 +137,7 @@ render-package/
 
 ```json
 {
-  "name": "@scope/render-example",
+  "name": "@scope/example",
   "version": "0.1.0",
   "type": "module",
   "exports": {
@@ -198,7 +198,7 @@ oa run <specifier> [options]
 ```json
 {
   "type": "ready",
-  "package": "@scope/render-example",
+  "package": "@scope/example",
   "version": "0.1.0",
   "url": "http://127.0.0.1:43127/",
   "pid": 12345
@@ -224,13 +224,13 @@ Fork 目录应在 `.oa/upstream.json` 中记录最少 provenance：
 
 ```json
 {
-  "upstream": "@scope/render-example@0.1.0",
+  "upstream": "@scope/example@0.1.0",
   "integrity": "sha512-...",
   "forkedAt": "2026-07-14T00:00:00.000Z"
 }
 ```
 
-这个旁路文件不改变 Render Package v0 的 manifest contract，也不需要首版设计完整的依赖 lockfile 或上游合并协议。
+这个旁路文件不改变 `react-render/v0` Artifact Package Contract，也不需要首版设计完整的依赖 lockfile 或上游合并协议。
 
 ### 首版不要加入的命令
 
@@ -331,7 +331,7 @@ Open Artifacts 不是：
 
 第一版只需要证明以下五件事：
 
-1. 在一个空目录执行 `npx @open-artifacts/cli run @open-artifacts/render-decision-board@0.1.0`，CLI 能下载 Package、启动 Server 并打开正确页面；
+1. 在一个空目录执行 `npx @open-artifacts/cli run @open-artifacts/decision-board@0.1.0`，CLI 能下载 Package、启动 Server 并打开正确页面；
 2. 第二次运行同一精确版本会复用完整性校验后的缓存；
 3. `oa fork <specifier> ./my-render` 生成一个不依赖 Open Artifacts monorepo 的独立源码目录；
 4. 在 fork 目录执行 `oa run .` 能运行修改后的源码和 Package 自有依赖；
@@ -348,12 +348,12 @@ Open Artifacts 不是：
 
 ## 从当前实现迁移
 
-当前代码已经验证了 Render Package Contract 和 React Runtime seam，但还没有 CLI。建议保留有效部分，并改变装配方式：
+当前代码已经验证了 Artifact Package Contract 和 React Runtime seam，但还没有 CLI。建议保留有效部分，并改变装配方式：
 
 ```text
 当前
 apps/web 启动
-    -> 扫描仓库 packages/render-*
+    -> 扫描仓库 packages/artifact-*
     -> 一次加载全部 Package
 
 目标
@@ -370,7 +370,7 @@ oa run <specifier>
 packages/cli/          oa 参数、resolve、cache、run、fork、JSON events
 packages/runtime/      Vite Host 创建与 Server 生命周期
 apps/web/              浏览器 Workbench UI
-packages/render-*/     本仓库内的 Contract fixtures 和官方示例
+packages/artifact-*/     本仓库内的 Contract fixtures 和官方示例
 ```
 
 第一步不需要重写 Workbench。只需要让它从 CLI 传入的单个 Package 入口加载，而不是扫描固定 monorepo 目录。
@@ -425,7 +425,7 @@ oa run <specifier>
 
 应该围绕 `oa` CLI 重构整个项目。
 
-Render Package Format 是协议，Workbench 是 Runtime UI，但 `oa` 才是把它们变成产品的入口。只有 CLI 能让 Package 离开当前 monorepo，被任何 Agent 下载、运行、打开、检查、fork，并再次作为 Package 分发。
+Artifact Package Format 是协议，Workbench 是 Runtime UI，但 `oa` 才是把它们变成产品的入口。只有 CLI 能让 Package 离开当前 monorepo，被任何 Agent 下载、运行、打开、检查、fork，并再次作为 Package 分发。
 
 最小而清晰的产品心智是：
 

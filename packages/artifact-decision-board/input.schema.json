@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://open-artifacts.dev/render-packages/decision-board/input.schema.json",
+  "$id": "https://open-artifacts.dev/artifact-packages/decision-board/input.schema.json",
   "title": "Decision Board input",
   "type": "object",
   "additionalProperties": false,

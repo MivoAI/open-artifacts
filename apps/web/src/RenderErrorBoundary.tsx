@@ -21,7 +21,7 @@ export class RenderErrorBoundary extends Component<
   }
 
   override componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error(`Render Package ${this.props.packageName} failed`, error, info);
+    console.error(`Artifact Package ${this.props.packageName} failed`, error, info);
   }
 
   override render() {

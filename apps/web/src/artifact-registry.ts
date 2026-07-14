@@ -1,9 +1,9 @@
-import discoveredPackages from 'virtual:open-artifacts-render-packages';
+import discoveredPackages from 'virtual:open-artifacts-artifact-packages';
 import type { ComponentType } from 'react';
 
 type RenderComponent = ComponentType<{ data: unknown }>;
 
-interface RenderManifest {
+interface ArtifactManifest {
   name: string;
   version: string;
   description: string;
@@ -13,7 +13,7 @@ interface RenderManifest {
   };
 }
 
-export interface RenderPackage {
+export interface ArtifactPackage {
   directory: string;
   slug: string;
   title: string;
@@ -42,7 +42,7 @@ function requireRecord(value: unknown, label: string): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
-function requireManifest(value: unknown, directory: string): RenderManifest {
+function requireManifest(value: unknown, directory: string): ArtifactManifest {
   const manifest = requireRecord(value, `${directory}/package.json`);
   const openArtifacts = requireRecord(manifest.openArtifacts, `${directory}.openArtifacts`);
 
@@ -52,20 +52,20 @@ function requireManifest(value: unknown, directory: string): RenderManifest {
     typeof manifest.description !== 'string' ||
     typeof openArtifacts.format !== 'string'
   ) {
-    throw new Error(`${directory}/package.json is missing Render Package metadata`);
+    throw new Error(`${directory}/package.json is missing Artifact Package metadata`);
   }
 
-  return manifest as unknown as RenderManifest;
+  return manifest as unknown as ArtifactManifest;
 }
 
 function slugFromDirectory(directory: string): string {
-  if (!directory.startsWith('render-')) {
-    throw new Error(`${directory} must use the render- package prefix`);
+  if (!directory.startsWith('artifact-')) {
+    throw new Error(`${directory} must use the artifact- package prefix`);
   }
-  return directory.slice('render-'.length);
+  return directory.slice('artifact-'.length);
 }
 
-export const renderPackages: RenderPackage[] = discoveredPackages.map((candidate) => {
+export const artifactPackages: ArtifactPackage[] = discoveredPackages.map((candidate) => {
   const manifest = requireManifest(candidate.manifest, candidate.directory);
   const schema = requireRecord(candidate.schema, `${candidate.directory} input schema`);
   const slug = slugFromDirectory(candidate.directory);
