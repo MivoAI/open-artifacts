@@ -70,6 +70,17 @@ async function sessionDirectories(home) {
   });
 }
 
+async function stopSession(home, sessionId) {
+  const sessionDirectory = join(home, '.open-artifacts', 'sessions', sessionId);
+  const record = JSON.parse(await readFile(join(sessionDirectory, 'record.json'), 'utf8'));
+  try {
+    process.kill(record.pid, 'SIGTERM');
+  } catch (error) {
+    if (error.code !== 'ESRCH') throw error;
+  }
+  await rm(sessionDirectory, { force: true, recursive: true });
+}
+
 function assertNoSessionProcessForHome(home) {
   const processes = spawnSync('/bin/ps', ['-axo', 'command='], { encoding: 'utf8' });
   assert.equal(processes.status, 0, processes.stderr);
@@ -83,6 +94,35 @@ function parseJsonError(result) {
 }
 
 test.before(buildCli);
+
+test('oa run accepts standard Input Contracts and memoized React exports', async (t) => {
+  const home = await mkdtemp(join(tmpdir(), 'open-artifacts-contract-compatibility-'));
+  let sessionId;
+  t.after(async () => {
+    if (sessionId) await stopSession(home, sessionId);
+    await rm(home, { force: true, recursive: true });
+  });
+  const artifactRoot = await createArtifactPackage(home, {
+    schema: {
+      $schema: 'https://json-schema.org/draft/2020-12/schema',
+      type: 'object',
+      properties: { message: { format: 'email' } },
+    },
+    source: `import { memo } from 'react';
+export default memo(function CompatibleFixture({ data }) { return <h1>{data.message}</h1>; });
+`,
+  });
+
+  const result = runBuiltCli(['run', artifactRoot, '--json', '--no-open'], {
+    home,
+    timeout: 10_000,
+  });
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const session = JSON.parse(result.stdout);
+  sessionId = session.sessionId;
+  assert.equal((await globalThis.fetch(session.url)).status, 200);
+});
 
 test('oa run reports stable Artifact Package contract errors before process creation', async (t) => {
   const home = await mkdtemp(join(tmpdir(), 'open-artifacts-contract-'));

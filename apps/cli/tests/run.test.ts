@@ -104,6 +104,37 @@ describe('local Artifact Package resolution', () => {
     ).rejects.toThrow(/does not satisfy react-render\/v0/);
   });
 
+  it('accepts a valid Input Contract without applying OA-internal strict lint rules', async () => {
+    const fixture = await createArtifactFixture();
+    await writeFile(
+      join(fixture.artifactRoot, 'input.schema.json'),
+      `${JSON.stringify({
+        $schema: 'https://json-schema.org/draft/2020-12/schema',
+        type: 'object',
+        properties: { message: { format: 'email' } },
+      })}\n`,
+    );
+
+    await expect(
+      resolveLocalArtifactPackage(fixture.artifactRoot, fixture.fixtureRoot),
+    ).resolves.toMatchObject({ identity: { name: '@open-artifacts/unit-fixture' } });
+  });
+
+  it('accepts a memoized React component as the default Artifact Source export', async () => {
+    const fixture = await createArtifactFixture(
+      'react-render/v0',
+      `import { memo } from 'react';
+export default memo(function MemoFixture({ data }: { data: { message: string } }) {
+  return <p>{data.message}</p>;
+});
+`,
+    );
+
+    await expect(
+      resolveLocalArtifactPackage(fixture.artifactRoot, fixture.fixtureRoot),
+    ).resolves.toMatchObject({ identity: { name: '@open-artifacts/unit-fixture' } });
+  });
+
   it('rejects a default export that is not a React component', async () => {
     const fixture = await createArtifactFixture('react-render/v0', 'export default 42;\n');
 

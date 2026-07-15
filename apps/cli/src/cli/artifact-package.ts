@@ -82,8 +82,9 @@ export interface ResolvedArtifactPackage {
 }
 
 const Ajv2020 = Ajv2020Import as unknown as typeof Ajv2020Constructor;
-const ajv = new Ajv2020({ allErrors: true, strict: true });
-const validateManifest = ajv.compile(artifactPackageManifestSchema);
+const manifestAjv = new Ajv2020({ allErrors: true, strict: true });
+const inputAjv = new Ajv2020({ allErrors: true, strict: false, validateFormats: false });
+const validateManifest = manifestAjv.compile(artifactPackageManifestSchema);
 
 function jsonPath(instancePath: string, missingProperty?: string) {
   const segments = instancePath
@@ -202,6 +203,13 @@ async function validateArtifactSource(entryPath: string) {
   }
 }
 
+function isArtifactRenderType(value: unknown) {
+  if (typeof value === 'function') return true;
+  if (!value || typeof value !== 'object') return false;
+  const reactType = (value as { $$typeof?: unknown }).$$typeof;
+  return reactType === Symbol.for('react.memo') || reactType === Symbol.for('react.forward_ref');
+}
+
 async function smokeRenderArtifactSource(
   artifactRoot: string,
   entryPath: string,
@@ -227,7 +235,7 @@ async function smokeRenderArtifactSource(
     const artifactModule = (await server.ssrLoadModule(`/@fs/${normalizePath(entryPath)}`)) as {
       default?: unknown;
     };
-    if (typeof artifactModule.default !== 'function') {
+    if (!isArtifactRenderType(artifactModule.default)) {
       throw new ArtifactPackageContractError([
         {
           path: '$.exports["."]',
@@ -318,7 +326,7 @@ export async function resolveLocalArtifactPackage(
 
   let validateInput: ValidateFunction;
   try {
-    validateInput = ajv.compile(schema as AnySchema);
+    validateInput = inputAjv.compile(schema as AnySchema);
   } catch (error) {
     throw new ArtifactPackageContractError([
       {
