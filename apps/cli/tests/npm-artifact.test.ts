@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   artifactCacheKey,
   npmSubprocessCommand,
+  packageLockGraphDigest,
   packageLockDependencyKey,
   parseNpmArtifactReference,
   sanitizeRegistryUrl,
@@ -63,6 +64,61 @@ describe('npm lockfile package keys', () => {
   });
 });
 
+describe('npm dependency lock graph identity', () => {
+  const root = {
+    integrity: 'sha512-root',
+    resolved: 'https://registry.example.test/root/-/root-1.0.0.tgz',
+    version: '1.0.0',
+  };
+
+  it('changes when a transitive dependency resolution changes', () => {
+    const lock = {
+      lockfileVersion: 3,
+      packages: {
+        'node_modules/root': root,
+        'node_modules/transitive': {
+          integrity: 'sha512-transitive-a',
+          resolved: 'https://registry-a.example.test/transitive/-/transitive-1.0.0.tgz',
+          version: '1.0.0',
+        },
+      },
+    };
+
+    expect(packageLockGraphDigest(lock)).not.toBe(
+      packageLockGraphDigest({
+        ...lock,
+        packages: {
+          ...lock.packages,
+          'node_modules/transitive': {
+            ...lock.packages['node_modules/transitive'],
+            integrity: 'sha512-transitive-b',
+            resolved: 'https://registry-b.example.test/transitive/-/transitive-1.0.0.tgz',
+          },
+        },
+      }),
+    );
+  });
+
+  it('does not bind credential-bearing URL components', () => {
+    const credentialed = {
+      lockfileVersion: 3,
+      packages: {
+        'node_modules/root': {
+          ...root,
+          resolved:
+            'https://user:secret@registry.example.test/root/-/root-1.0.0.tgz?token=secret#fragment',
+        },
+      },
+    };
+    const sanitized = {
+      lockfileVersion: 3,
+      packages: { 'node_modules/root': root },
+    };
+
+    expect(packageLockGraphDigest(credentialed)).toBe(packageLockGraphDigest(sanitized));
+  });
+});
+
 describe('npm Artifact Reference parsing', () => {
   it.each([
     ['@scope/artifact', '@scope/artifact', 'latest', 'tag'],
@@ -90,10 +146,11 @@ describe('npm Artifact Reference parsing', () => {
 describe('npm Artifact cache identity', () => {
   const provenance: NpmArtifactProvenance = {
     integrity: 'sha512-fixture',
+    lockGraphDigest: 'sha256-lock-graph-a',
     name: '@scope/artifact',
     registry: 'https://registry.example.test/',
     resolved: 'https://registry.example.test/@scope/artifact/-/artifact-1.2.3.tgz',
-    schemaVersion: 1,
+    schemaVersion: 2,
     version: '1.2.3',
   };
 
@@ -103,6 +160,9 @@ describe('npm Artifact cache identity', () => {
       artifactCacheKey(provenance),
     );
     expect(artifactCacheKey({ ...provenance, registry: 'https://mirror.example.test/' })).not.toBe(
+      artifactCacheKey(provenance),
+    );
+    expect(artifactCacheKey({ ...provenance, lockGraphDigest: 'sha256-lock-graph-b' })).not.toBe(
       artifactCacheKey(provenance),
     );
   });

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { access, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import test from 'node:test';
@@ -40,7 +40,7 @@ async function cacheEntries(home) {
 async function assertNoCacheTemporaries(home) {
   const entries = await readdir(join(home, '.open-artifacts', 'cache', 'artifacts'));
   assert.deepEqual(
-    entries.filter((entry) => /^\.(?:resolve|staging|commit)-/.test(entry)),
+    entries.filter((entry) => /^\.(?:resolve|staging|commit)-|\.lock$|\.stale-/.test(entry)),
     [],
   );
 }
@@ -135,26 +135,30 @@ test('oa resolves registry specifiers into immutable script-free Artifact cache 
   }
 
   assert.ok(latestEntry);
-  await writeFile(
-    join(
-      home,
-      '.open-artifacts',
-      'cache',
-      'artifacts',
-      latestEntry,
-      'node_modules',
-      'oa-registry-artifact',
-      'example.json',
-    ),
-    '{}\n',
+  const tamperedExample = join(
+    home,
+    '.open-artifacts',
+    'cache',
+    'artifacts',
+    latestEntry,
+    'node_modules',
+    'oa-registry-artifact',
+    'example.json',
   );
+  await writeFile(tamperedExample, '{"message":"tampered but contract-valid"}\n');
   const invalidCacheHit = await runCli(
     ['run', 'oa-registry-artifact@stable', '--json', '--no-open'],
     environment,
   );
-  assert.equal(invalidCacheHit.status, 1, invalidCacheHit.stdout);
-  assert.equal(JSON.parse(invalidCacheHit.stderr).error.code, 'ARTIFACT_PACKAGE_CONTRACT_INVALID');
+  assert.equal(invalidCacheHit.status, 0, invalidCacheHit.stderr || invalidCacheHit.stdout);
+  const repairedSession = JSON.parse(invalidCacheHit.stdout);
+  sessions.push(repairedSession.sessionId);
+  assert.deepEqual(JSON.parse(await readFile(tamperedExample, 'utf8')), {
+    message: 'version 1.1.0',
+  });
   assert.equal(registry.count('/tarballs/oa-registry-artifact-1.1.0.tgz'), 1);
+  await stopSession(home, repairedSession.sessionId);
+  sessions.pop();
   assert.deepEqual(await sessionEntries(home), []);
 
   const beforeInvalid = await cacheEntries(home);
@@ -199,15 +203,12 @@ test('oa inherits project npm config without persisting registry credentials', a
     await registry.close();
     await rm(root, { force: true, recursive: true });
   });
-  await Promise.all([
-    import('node:fs/promises').then(({ mkdir }) => mkdir(home, { recursive: true })),
-    import('node:fs/promises').then(({ mkdir }) => mkdir(projectRoot, { recursive: true })),
-  ]);
+  await Promise.all([mkdir(home, { recursive: true }), mkdir(projectRoot, { recursive: true })]);
   await Promise.all([
     writeFile(join(home, '.npmrc'), 'registry=http://127.0.0.1:9/\n'),
     writeFile(
       join(projectRoot, '.npmrc'),
-      `registry=${registry.origin}/\n@oa-fixture:registry=${registry.origin}/\n//127.0.0.1:${new URL(registry.origin).port}/:_authToken=fixture-token-secret\n`,
+      `registry=${registry.origin}/\n@oa-fixture:registry=${registry.origin}/\nlockfile-version=1\n//127.0.0.1:${new URL(registry.origin).port}/:_authToken=fixture-token-secret\n`,
     ),
     writeFile(
       join(projectRoot, 'package.json'),
@@ -240,6 +241,30 @@ test('oa inherits project npm config without persisting registry credentials', a
     JSON.parse(await readFile(join(cacheEntry, 'open-artifacts-provenance.json'), 'utf8')).registry,
     `${registry.origin}/`,
   );
+  await stopSession(home, sessionId);
+  sessionId = undefined;
+
+  await writeFile(join(projectRoot, '.npmrc'), 'registry=http://127.0.0.1:9/\n');
+  const environmentOverride = await runBuiltCliAsync(
+    ['run', 'oa-registry-artifact@1.0.0', '--json', '--no-open'],
+    {
+      cwd: projectRoot,
+      env: {
+        NPM_CONFIG_REGISTRY: `${registry.origin}/`,
+        npm_config_registry: `${registry.origin}/`,
+      },
+      home,
+      timeout: 60_000,
+    },
+  );
+  assert.equal(
+    environmentOverride.status,
+    0,
+    environmentOverride.stderr || environmentOverride.stdout,
+  );
+  sessionId = JSON.parse(environmentOverride.stdout).sessionId;
+  await stopSession(home, sessionId);
+  sessionId = undefined;
 
   await writeFile(
     join(projectRoot, '.npmrc'),
@@ -257,4 +282,39 @@ test('oa inherits project npm config without persisting registry credentials', a
     await readTree(join(home, '.open-artifacts')),
     /fixture-token-secret|user:secret/,
   );
+});
+
+test('concurrent npm Artifact cache misses commit one complete persistent entry', async (t) => {
+  const home = await mkdtemp(join(tmpdir(), 'open-artifacts-npm-concurrency-'));
+  const registry = await createControlledRegistry();
+  const environment = cliEnvironment(home, registry);
+  const sessions = [];
+  t.after(async () => {
+    await Promise.allSettled(sessions.map((sessionId) => stopSession(home, sessionId)));
+    await registry.close();
+    await rm(home, { force: true, recursive: true });
+  });
+
+  const results = await Promise.all(
+    Array.from({ length: 6 }, () =>
+      runCli(['run', 'oa-registry-artifact@1.0.0', '--json', '--no-open'], environment),
+    ),
+  );
+  for (const result of results) {
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    sessions.push(JSON.parse(result.stdout).sessionId);
+  }
+
+  assert.equal((await cacheEntries(home)).length, 1);
+  assert.equal(registry.count('/tarballs/oa-registry-artifact-1.0.0.tgz'), 1);
+  assert.equal(registry.count('/tarballs/oa-registry-helper-1.0.0.tgz'), 1);
+  await assertNoCacheTemporaries(home);
+
+  const cacheHit = await runCli(
+    ['run', 'oa-registry-artifact@1.0.0', '--json', '--no-open'],
+    environment,
+  );
+  assert.equal(cacheHit.status, 0, cacheHit.stderr || cacheHit.stdout);
+  sessions.push(JSON.parse(cacheHit.stdout).sessionId);
+  assert.equal((await cacheEntries(home)).length, 1);
 });

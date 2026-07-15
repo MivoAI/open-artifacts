@@ -1,10 +1,13 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import {
   cp,
+  lstat,
   mkdir,
   mkdtemp,
   readFile,
+  readdir,
+  readlink,
   realpath,
   rename,
   rm,
@@ -13,6 +16,7 @@ import {
 } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
 import { promisify } from 'node:util';
 
 import npa from 'npm-package-arg';
@@ -23,6 +27,10 @@ import { ArtifactPackageContractError, ArtifactReferenceError } from './errors.j
 const executeFile = promisify(execFile);
 const supportedRegistryTypes = new Set(['range', 'tag', 'version']);
 const defaultRegistry = 'https://registry.npmjs.org/';
+const cacheContentManifestName = 'open-artifacts-content.json';
+const cacheLockWaitMilliseconds = 120_000;
+const cacheLockMaximumAgeMilliseconds = 10 * 60_000;
+const ownerlessCacheLockGraceMilliseconds = 5_000;
 const windowsNpmScript = [
   "$ErrorActionPreference = 'Stop'",
   '$npmArguments = @(ConvertFrom-Json -InputObject $env:OA_NPM_ARGUMENTS_JSON)',
@@ -38,14 +46,16 @@ export interface NpmArtifactReference {
 
 export interface NpmArtifactProvenance {
   integrity: string;
+  lockGraphDigest: string;
   name: string;
   registry: string;
   resolved: string;
-  schemaVersion: 1;
+  schemaVersion: 2;
   version: string;
 }
 
 interface PackageLock {
+  lockfileVersion?: number;
   packages?: Record<
     string,
     {
@@ -54,6 +64,12 @@ interface PackageLock {
       version?: string;
     }
   >;
+}
+
+interface CacheContentManifest {
+  algorithm: 'sha256';
+  digest: string;
+  schemaVersion: 1;
 }
 
 export function sanitizeRegistryUrl(value: string) {
@@ -80,6 +96,26 @@ function sanitizeResolvedUrls(value: unknown): unknown {
         : sanitizeResolvedUrls(nestedValue),
     ]),
   );
+}
+
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (!value || typeof value !== 'object') return JSON.stringify(value) ?? 'null';
+  return `{${Object.entries(value)
+    .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+    .map(([key, nestedValue]) => `${JSON.stringify(key)}:${canonicalJson(nestedValue)}`)
+    .join(',')}}`;
+}
+
+export function packageLockGraphDigest(lock: PackageLock) {
+  const installedPackages = Object.fromEntries(
+    Object.entries(lock.packages ?? {}).filter(([packagePath]) => packagePath !== ''),
+  );
+  const sanitizedGraph = sanitizeResolvedUrls({
+    lockfileVersion: lock.lockfileVersion,
+    packages: installedPackages,
+  });
+  return `sha256:${createHash('sha256').update(canonicalJson(sanitizedGraph)).digest('hex')}`;
 }
 
 async function sanitizePackageLock(path: string) {
@@ -130,6 +166,7 @@ export function artifactCacheKey(provenance: NpmArtifactProvenance) {
     .update(
       JSON.stringify({
         integrity: provenance.integrity,
+        lockGraphDigest: provenance.lockGraphDigest,
         name: provenance.name,
         registry: provenance.registry,
         resolved: provenance.resolved,
@@ -173,6 +210,8 @@ function npmEnvironment(projectConfig: string | undefined) {
   delete environment.npm_config_userconfig;
   environment.NPM_CONFIG_GLOBALCONFIG = originalUserConfig;
   environment.NPM_CONFIG_USERCONFIG = projectConfig;
+  // Keep explicit npm_config_* values: npm intentionally gives environment values precedence
+  // over project config, and OA must preserve the caller's effective npm configuration.
   return environment;
 }
 
@@ -239,6 +278,7 @@ async function resolveProvenance(
     [
       'install',
       '--package-lock-only',
+      '--lockfile-version=3',
       '--ignore-scripts',
       '--legacy-peer-deps',
       '--omit=dev',
@@ -256,10 +296,11 @@ async function resolveProvenance(
 
   return {
     integrity: locked.integrity,
+    lockGraphDigest: packageLockGraphDigest(lock),
     name: reference.name,
     registry: await configuredRegistry(root, reference, projectConfig),
     resolved: sanitizeRegistryUrl(locked.resolved),
-    schemaVersion: 1,
+    schemaVersion: 2,
     version: locked.version,
   } satisfies NpmArtifactProvenance;
 }
@@ -282,13 +323,78 @@ async function readCachedProvenance(cacheEntry: string) {
 function sameProvenance(left: NpmArtifactProvenance | undefined, right: NpmArtifactProvenance) {
   return Boolean(
     left &&
-    left.schemaVersion === 1 &&
+    left.schemaVersion === 2 &&
     left.name === right.name &&
     left.version === right.version &&
     left.integrity === right.integrity &&
+    left.lockGraphDigest === right.lockGraphDigest &&
     left.resolved === right.resolved &&
     left.registry === right.registry,
   );
+}
+
+async function cacheContentDigest(root: string) {
+  const records: Array<Record<string, number | string>> = [];
+
+  async function visit(directory: string, directoryRelativePath = ''): Promise<void> {
+    const entries = await readdir(directory, { withFileTypes: true });
+    entries.sort((left, right) => (left.name < right.name ? -1 : left.name > right.name ? 1 : 0));
+    for (const entry of entries) {
+      const path = join(directory, entry.name);
+      const relativePath = directoryRelativePath
+        ? `${directoryRelativePath}/${entry.name}`
+        : entry.name;
+      if (relativePath === cacheContentManifestName) continue;
+
+      const metadata = await lstat(path);
+      if (metadata.isDirectory()) {
+        await visit(path, relativePath);
+      } else if (metadata.isSymbolicLink()) {
+        records.push({ path: relativePath, target: await readlink(path), type: 'symlink' });
+      } else if (metadata.isFile()) {
+        const contents = await readFile(path);
+        records.push({
+          digest: createHash('sha256').update(contents).digest('hex'),
+          mode: metadata.mode & 0o777,
+          path: relativePath,
+          size: metadata.size,
+          type: 'file',
+        });
+      } else {
+        records.push({ path: relativePath, type: 'other' });
+      }
+    }
+  }
+
+  await visit(root);
+  return createHash('sha256').update(canonicalJson(records)).digest('hex');
+}
+
+async function writeCacheContentManifest(cacheEntry: string) {
+  const manifest: CacheContentManifest = {
+    algorithm: 'sha256',
+    digest: await cacheContentDigest(cacheEntry),
+    schemaVersion: 1,
+  };
+  await writeFile(
+    join(cacheEntry, cacheContentManifestName),
+    `${JSON.stringify(manifest, null, 2)}\n`,
+  );
+}
+
+async function hasValidCacheContent(cacheEntry: string) {
+  try {
+    const manifest = JSON.parse(
+      await readFile(join(cacheEntry, cacheContentManifestName), 'utf8'),
+    ) as CacheContentManifest;
+    return (
+      manifest.schemaVersion === 1 &&
+      manifest.algorithm === 'sha256' &&
+      manifest.digest === (await cacheContentDigest(cacheEntry))
+    );
+  } catch {
+    return false;
+  }
 }
 
 async function validateCachedPackage(
@@ -303,6 +409,7 @@ async function validateCachedPackage(
 
   const cachedProvenance = await readCachedProvenance(canonicalEntry);
   if (!sameProvenance(cachedProvenance, provenance)) return undefined;
+  if (!(await hasValidCacheContent(canonicalEntry))) return undefined;
 
   const packageRoot = await realpath(join(canonicalEntry, dependencyPath(provenance.name))).catch(
     () => undefined,
@@ -346,7 +453,15 @@ async function installCacheEntry(
     );
     await runNpm(
       installRoot,
-      ['ci', '--ignore-scripts', '--legacy-peer-deps', '--omit=dev', '--no-audit', '--no-fund'],
+      [
+        'ci',
+        '--lockfile-version=3',
+        '--ignore-scripts',
+        '--legacy-peer-deps',
+        '--omit=dev',
+        '--no-audit',
+        '--no-fund',
+      ],
       projectConfig,
     );
     const installedLockPath = join(installRoot, 'package-lock.json');
@@ -372,6 +487,7 @@ async function installCacheEntry(
         await readFile(join(installRoot, 'open-artifacts-provenance.json')),
       ),
     ]);
+    await writeCacheContentManifest(commitRoot);
     await validateCachedPackage(cacheRoot, commitRoot, provenance).then((artifactPackage) => {
       if (!artifactPackage) throw new Error('staged npm Artifact Package is not contained');
     });
@@ -396,6 +512,75 @@ async function installCacheEntry(
   }
 }
 
+async function withCacheEntryLock<T>(cacheRoot: string, cacheKey: string, work: () => Promise<T>) {
+  const lockPath = join(cacheRoot, `.${cacheKey}.lock`);
+  const deadline = Date.now() + cacheLockWaitMilliseconds;
+
+  async function removeStaleLock() {
+    const owner = await readFile(join(lockPath, 'owner.json'), 'utf8')
+      .then((contents) => JSON.parse(contents) as { createdAt?: string; pid?: number })
+      .catch(() => undefined);
+    const lockMetadata = await stat(lockPath).catch(() => undefined);
+    const lockAge = lockMetadata ? Date.now() - lockMetadata.mtimeMs : 0;
+    let ownerIsAlive = false;
+    if (
+      owner?.pid &&
+      Number.isSafeInteger(owner.pid) &&
+      lockAge < cacheLockMaximumAgeMilliseconds
+    ) {
+      try {
+        process.kill(owner.pid, 0);
+        ownerIsAlive = true;
+      } catch (error) {
+        ownerIsAlive = !(error instanceof Error && 'code' in error && error.code === 'ESRCH');
+      }
+    } else {
+      ownerIsAlive = Boolean(
+        lockMetadata && Date.now() - lockMetadata.mtimeMs < ownerlessCacheLockGraceMilliseconds,
+      );
+    }
+    if (ownerIsAlive) return;
+
+    const quarantinePath = join(cacheRoot, `.${cacheKey}.stale-${randomUUID()}`);
+    try {
+      await rename(lockPath, quarantinePath);
+      await rm(quarantinePath, { force: true, recursive: true });
+    } catch (error) {
+      if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error;
+    }
+  }
+
+  while (true) {
+    try {
+      await mkdir(lockPath);
+    } catch (error) {
+      if (!(error instanceof Error && 'code' in error && error.code === 'EEXIST')) throw error;
+      await removeStaleLock();
+      if (Date.now() >= deadline) {
+        throw new ArtifactReferenceError('Timed out waiting for the npm Artifact cache lock');
+      }
+      await delay(25);
+      continue;
+    }
+    try {
+      await writeFile(
+        join(lockPath, 'owner.json'),
+        `${JSON.stringify({ createdAt: new Date().toISOString(), pid: process.pid })}\n`,
+      );
+      break;
+    } catch (error) {
+      await rm(lockPath, { force: true, recursive: true });
+      throw error;
+    }
+  }
+
+  try {
+    return await work();
+  } finally {
+    await rm(lockPath, { force: true, recursive: true });
+  }
+}
+
 export async function resolveNpmArtifactPackage(
   referenceValue: string,
   invocationCwd = process.cwd(),
@@ -409,18 +594,26 @@ export async function resolveNpmArtifactPackage(
   try {
     await writeResolutionProject(resolutionRoot, reference);
     const provenance = await resolveProvenance(resolutionRoot, reference, projectConfig);
-    const cacheEntry = join(cacheRoot, artifactCacheKey(provenance));
+    const cacheKey = artifactCacheKey(provenance);
+    const cacheEntry = join(cacheRoot, cacheKey);
     const cached = await validateCachedPackage(cacheRoot, cacheEntry, provenance);
     if (cached) return cached;
 
-    await rm(cacheEntry, { force: true, recursive: true });
-    await installCacheEntry(resolutionRoot, cacheRoot, cacheEntry, provenance, projectConfig);
-    const installed = await validateCachedPackage(cacheRoot, cacheEntry, provenance);
-    if (!installed) {
+    return await withCacheEntryLock(cacheRoot, cacheKey, async () => {
+      const concurrentlyInstalled = await validateCachedPackage(cacheRoot, cacheEntry, provenance);
+      if (concurrentlyInstalled) return concurrentlyInstalled;
+
       await rm(cacheEntry, { force: true, recursive: true });
-      throw new ArtifactReferenceError('Installed npm Artifact Package failed cache verification');
-    }
-    return installed;
+      await installCacheEntry(resolutionRoot, cacheRoot, cacheEntry, provenance, projectConfig);
+      const installed = await validateCachedPackage(cacheRoot, cacheEntry, provenance);
+      if (!installed) {
+        await rm(cacheEntry, { force: true, recursive: true });
+        throw new ArtifactReferenceError(
+          'Installed npm Artifact Package failed cache verification',
+        );
+      }
+      return installed;
+    });
   } finally {
     await rm(resolutionRoot, { force: true, recursive: true });
   }
