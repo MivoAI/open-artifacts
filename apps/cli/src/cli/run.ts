@@ -51,7 +51,11 @@ export async function resolveLocalArtifactPackage(
   reference: string,
   cwd: string,
 ): Promise<ResolvedArtifactPackage> {
-  const isExplicitRelative = reference.startsWith('./') || reference.startsWith('../');
+  const isExplicitRelative =
+    reference === '.' ||
+    reference === '..' ||
+    reference.startsWith('./') ||
+    reference.startsWith('../');
   if (!isExplicitRelative && !isAbsolute(reference)) {
     throw new Error(
       `Issue #3 supports explicit local Artifact References only; received: ${reference}`,

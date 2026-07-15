@@ -61,6 +61,14 @@ describe('local Artifact Package resolution', () => {
     expect(artifactPackage.exampleInput).toEqual({ message: 'hello' });
   });
 
+  it('accepts the current directory as an explicit local Artifact Reference', async () => {
+    const fixture = await createArtifactFixture();
+
+    await expect(resolveLocalArtifactPackage('.', fixture.artifactRoot)).resolves.toMatchObject({
+      identity: { name: '@open-artifacts/unit-fixture' },
+    });
+  });
+
   it('keeps bare npm-like references outside the local tracer bullet', async () => {
     await expect(resolveLocalArtifactPackage('@scope/package', process.cwd())).rejects.toThrow(
       /explicit local Artifact References only/,
