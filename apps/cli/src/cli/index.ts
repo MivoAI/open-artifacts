@@ -16,16 +16,23 @@ const runCommand = program
   .command('run')
   .description('Start a new Artifact Session')
   .argument('<artifact>', 'explicit relative or absolute local Artifact Package path')
+  .option('--input <file>', 'read Artifact Input from a JSON file')
+  .option('--data <json>', 'read Artifact Input from inline JSON')
   .option('--json', 'emit stable machine-readable output', false)
   .option('--no-open', 'do not open the system browser')
-  .action(async (artifact: string, options: { json: boolean; open: boolean }) => {
-    try {
-      await runArtifactPackage(artifact, options);
-    } catch (error) {
-      writeCliError(error, options.json);
-      process.exitCode = 1;
-    }
-  });
+  .action(
+    async (
+      artifact: string,
+      options: { data?: string; input?: string; json: boolean; open: boolean },
+    ) => {
+      try {
+        await runArtifactPackage(artifact, options);
+      } catch (error) {
+        writeCliError(error, options.json);
+        process.exitCode = 1;
+      }
+    },
+  );
 
 runCommand.addHelpText(
   'after',

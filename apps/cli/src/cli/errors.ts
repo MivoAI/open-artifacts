@@ -3,7 +3,7 @@ export interface CliIssue {
   path: string;
 }
 
-type CliErrorKind = 'contract' | 'reference' | 'session';
+type CliErrorKind = 'contract' | 'input' | 'reference' | 'session';
 
 export class CliError extends Error {
   constructor(
@@ -35,6 +35,39 @@ export class ArtifactPackageContractError extends CliError {
 export class ArtifactReferenceError extends CliError {
   constructor(message: string) {
     super('ARTIFACT_REFERENCE_INVALID', 'reference', message);
+  }
+}
+
+export class ArtifactInputOptionsConflictError extends CliError {
+  constructor() {
+    super('ARTIFACT_INPUT_OPTIONS_CONFLICT', 'input', '--input and --data cannot be used together');
+  }
+}
+
+export class ArtifactInputFileUnreadableError extends CliError {
+  constructor(reference: string) {
+    super(
+      'ARTIFACT_INPUT_FILE_UNREADABLE',
+      'input',
+      `Artifact Input file is not readable: ${reference}`,
+    );
+  }
+}
+
+export class ArtifactInputJsonError extends CliError {
+  constructor(source: string) {
+    super('ARTIFACT_INPUT_JSON_INVALID', 'input', `${source} must contain valid JSON`);
+  }
+}
+
+export class ArtifactInputContractError extends CliError {
+  constructor(issues: CliIssue[]) {
+    super(
+      'ARTIFACT_INPUT_CONTRACT_INVALID',
+      'input',
+      'Artifact Input does not satisfy the Input Contract',
+      issues,
+    );
   }
 }
 
@@ -73,9 +106,11 @@ export function writeCliError(error: unknown, json: boolean) {
   const heading =
     cliError.kind === 'contract'
       ? 'Artifact Package contract error'
-      : cliError.kind === 'reference'
-        ? 'Artifact Reference error'
-        : 'Artifact Session error';
+      : cliError.kind === 'input'
+        ? 'Artifact Input error'
+        : cliError.kind === 'reference'
+          ? 'Artifact Reference error'
+          : 'Artifact Session error';
   const issues =
     cliError.issues?.map((issue) => `\n  - ${issue.path}: ${issue.message}`).join('') ?? '';
   process.stderr.write(`oa: ${heading}: ${cliError.message}${issues}\n`);

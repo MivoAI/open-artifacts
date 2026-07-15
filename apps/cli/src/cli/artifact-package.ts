@@ -79,6 +79,7 @@ interface ArtifactManifest {
 export interface ResolvedArtifactPackage {
   exampleInput: unknown;
   identity: ArtifactIdentity;
+  validateInput(input: unknown): CliIssue[];
 }
 
 const Ajv2020 = Ajv2020Import as unknown as typeof Ajv2020Constructor;
@@ -337,11 +338,12 @@ export async function resolveLocalArtifactPackage(
   }
 
   const exampleInput = await readJson(resources['example.json'], '$.example');
-  if (!validateInput(exampleInput)) {
-    throw new ArtifactPackageContractError(
-      formatValidationIssues(validateInput.errors, '$.example'),
-    );
-  }
+  const validateResolvedInput = (input: unknown, prefix = '$') => {
+    if (validateInput(input)) return [];
+    return formatValidationIssues(validateInput.errors, prefix);
+  };
+  const exampleIssues = validateResolvedInput(exampleInput, '$.example');
+  if (exampleIssues.length > 0) throw new ArtifactPackageContractError(exampleIssues);
   await smokeRenderArtifactSource(root, resources['src/index.tsx'], exampleInput);
 
   return {
@@ -352,5 +354,6 @@ export async function resolveLocalArtifactPackage(
       root,
       version: manifest.version,
     },
+    validateInput: validateResolvedInput,
   };
 }

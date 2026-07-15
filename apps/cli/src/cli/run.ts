@@ -11,10 +11,15 @@ import type {
   RuntimeReadyState,
   SessionRuntimeConfig,
 } from '../runtime/config.js';
+import {
+  assertArtifactInputOptions,
+  selectArtifactInput,
+  type ArtifactInputOptions,
+} from './artifact-input.js';
 import { resolveLocalArtifactPackage } from './artifact-package.js';
 import { ArtifactSessionStartError } from './errors.js';
 
-interface RunOptions {
+interface RunOptions extends ArtifactInputOptions {
   json: boolean;
   open: boolean;
 }
@@ -101,13 +106,15 @@ function openBrowser(url: string) {
 }
 
 export async function runArtifactPackage(reference: string, options: RunOptions) {
+  assertArtifactInputOptions(options);
   const artifactPackage = await resolveLocalArtifactPackage(reference, process.cwd());
+  const artifactInput = await selectArtifactInput(artifactPackage, options, process.cwd());
   const sessionId = randomUUID();
   const sessionDirectory = resolve(homedir(), '.open-artifacts', 'sessions', sessionId);
   const readyFile = resolve(sessionDirectory, 'ready.json');
   const runtimeConfig: SessionRuntimeConfig = {
     artifact: artifactPackage.identity,
-    exampleInput: artifactPackage.exampleInput,
+    artifactInput,
     readyFile,
     sessionDirectory,
     sessionId,

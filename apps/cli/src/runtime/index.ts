@@ -53,7 +53,7 @@ import { createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import Render from ${JSON.stringify(entryUrl)};
 
-const data = ${JSON.stringify(config.exampleInput)};
+const data = ${JSON.stringify(config.artifactInput)};
 const root = document.getElementById('root');
 if (!root) throw new Error('Open Artifacts Runtime root is missing');
 createRoot(root).render(createElement(Render, { data }));
