@@ -15,7 +15,8 @@
         { "contains": { "const": "src" } },
         { "contains": { "const": "input.schema.json" } },
         { "contains": { "const": "example.json" } },
-        { "contains": { "const": "tsconfig.json" } }
+        { "contains": { "const": "tsconfig.json" } },
+        { "contains": { "const": "README.md" } }
       ]
     },
     "exports": {
@@ -45,7 +46,7 @@
     },
     "dependencies": {
       "type": "object",
-      "not": { "required": ["react"] },
+      "properties": { "react": false },
       "additionalProperties": { "type": "string" }
     }
   }

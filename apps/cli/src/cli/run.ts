@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import { open, mkdir, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises';
+import { open, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { isAbsolute, relative, resolve } from 'node:path';
+import { resolve } from 'node:path';
 import { spawn } from 'node:child_process';
+import type { ChildProcess } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 import type {
@@ -10,24 +11,12 @@ import type {
   RuntimeReadyState,
   SessionRuntimeConfig,
 } from '../runtime/config.js';
-
-interface ArtifactManifest {
-  exports?: Record<string, string>;
-  name?: string;
-  openArtifacts?: {
-    format?: string;
-  };
-  version?: string;
-}
+import { resolveLocalArtifactPackage } from './artifact-package.js';
+import { ArtifactRuntimeStartError } from './errors.js';
 
 interface RunOptions {
   json: boolean;
   open: boolean;
-}
-
-interface ResolvedArtifactPackage {
-  exampleInput: unknown;
-  identity: ArtifactIdentity;
 }
 
 interface SessionRecord {
@@ -38,57 +27,13 @@ interface SessionRecord {
   url: string;
 }
 
-function resolvePackageFile(root: string, packagePath: string) {
-  const resolved = resolve(root, packagePath);
-  const pathWithinPackage = relative(root, resolved);
-  if (pathWithinPackage.startsWith('..') || isAbsolute(pathWithinPackage)) {
-    throw new Error(`Artifact Package export leaves the package root: ${packagePath}`);
+function isProcessRunning(pid: number) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
   }
-  return resolved;
-}
-
-export async function resolveLocalArtifactPackage(
-  reference: string,
-  cwd: string,
-): Promise<ResolvedArtifactPackage> {
-  const isExplicitRelative =
-    reference === '.' ||
-    reference === '..' ||
-    reference.startsWith('./') ||
-    reference.startsWith('../');
-  if (!isExplicitRelative && !isAbsolute(reference)) {
-    throw new Error(
-      `Issue #3 supports explicit local Artifact References only; received: ${reference}`,
-    );
-  }
-
-  const root = await realpath(resolve(cwd, reference));
-  if (!(await stat(root)).isDirectory())
-    throw new Error(`Artifact Reference is not a directory: ${root}`);
-
-  const manifest = JSON.parse(
-    await readFile(resolve(root, 'package.json'), 'utf8'),
-  ) as ArtifactManifest;
-  if (manifest.openArtifacts?.format !== 'react-render/v0') {
-    throw new Error(`Unsupported Artifact Package format in ${root}`);
-  }
-  if (!manifest.name || !manifest.version)
-    throw new Error(`Artifact Package identity is missing in ${root}`);
-
-  const entryExport = manifest.exports?.['.'];
-  const exampleExport = manifest.exports?.['./example'];
-  if (!entryExport || !exampleExport)
-    throw new Error(`Artifact Package exports are incomplete in ${root}`);
-
-  return {
-    exampleInput: JSON.parse(await readFile(resolvePackageFile(root, exampleExport), 'utf8')),
-    identity: {
-      entryPath: resolvePackageFile(root, entryExport),
-      name: manifest.name,
-      root,
-      version: manifest.version,
-    },
-  };
 }
 
 export async function waitForRuntime(
@@ -98,6 +43,9 @@ export async function waitForRuntime(
   const deadline = Date.now() + 20_000;
 
   while (Date.now() < deadline) {
+    if (!isProcessRunning(childPid)) {
+      throw new Error('Artifact Session Runtime exited before readiness');
+    }
     const ready = await readFile(readyFile, 'utf8')
       .then((value) => JSON.parse(value) as RuntimeReadyState)
       .catch(() => undefined);
@@ -118,6 +66,30 @@ export async function waitForRuntime(
   }
 
   throw new Error('Artifact Session Runtime did not become ready within 20 seconds');
+}
+
+function waitForChildExit(child: ChildProcess, timeout: number) {
+  if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve(true);
+
+  return new Promise<boolean>((resolveExit) => {
+    const timeoutId = setTimeout(() => {
+      child.removeListener('exit', handleExit);
+      resolveExit(false);
+    }, timeout);
+    const handleExit = () => {
+      clearTimeout(timeoutId);
+      resolveExit(true);
+    };
+    child.once('exit', handleExit);
+  });
+}
+
+async function terminateFailedRuntime(child: ChildProcess) {
+  if (await waitForChildExit(child, 0)) return;
+  child.kill('SIGTERM');
+  if (await waitForChildExit(child, 3_000)) return;
+  child.kill('SIGKILL');
+  await waitForChildExit(child, 1_000);
 }
 
 function openBrowser(url: string) {
@@ -141,27 +113,28 @@ export async function runArtifactPackage(reference: string, options: RunOptions)
     sessionId,
   };
 
-  await mkdir(sessionDirectory, { recursive: true });
   const configPath = resolve(sessionDirectory, 'runtime.json');
   const logPath = resolve(sessionDirectory, 'runtime.log');
-  await writeFile(configPath, `${JSON.stringify(runtimeConfig, null, 2)}\n`);
-  const log = await open(logPath, 'a');
   const runtimeEntry = fileURLToPath(new URL('../runtime/index.js', import.meta.url));
-  const child = spawn(process.execPath, [runtimeEntry, configPath], {
-    cwd: artifactPackage.identity.root,
-    detached: true,
-    stdio: ['ignore', log.fd, log.fd],
-  });
-  child.unref();
-  await log.close();
-
-  if (!child.pid) {
-    await rm(sessionDirectory, { force: true, recursive: true });
-    throw new Error('Artifact Session Runtime process did not start');
-  }
+  let child: ChildProcess | undefined;
 
   try {
-    const ready = await waitForRuntime(readyFile, child.pid);
+    await mkdir(sessionDirectory, { recursive: true });
+    await writeFile(configPath, `${JSON.stringify(runtimeConfig, null, 2)}\n`);
+    const log = await open(logPath, 'a');
+    child = spawn(process.execPath, [runtimeEntry, configPath], {
+      cwd: artifactPackage.identity.root,
+      detached: true,
+      stdio: ['ignore', log.fd, log.fd],
+    });
+    await log.close();
+    const childPid = child.pid;
+    if (!childPid) throw new Error('Artifact Session Runtime process did not start');
+
+    const ready = await Promise.race([
+      waitForRuntime(readyFile, childPid),
+      new Promise<never>((_resolve, reject) => child?.once('error', reject)),
+    ]);
     const record: SessionRecord = {
       artifact: artifactPackage.identity,
       pid: ready.pid,
@@ -173,6 +146,7 @@ export async function runArtifactPackage(reference: string, options: RunOptions)
       resolve(sessionDirectory, 'record.json'),
       `${JSON.stringify(record, null, 2)}\n`,
     );
+    child.unref();
 
     const result = {
       artifact: {
@@ -190,13 +164,9 @@ export async function runArtifactPackage(reference: string, options: RunOptions)
         ? `${JSON.stringify(result)}\n`
         : `Artifact Session ${sessionId}\n${artifactPackage.identity.name}\n${ready.url}\n`,
     );
-  } catch (error) {
-    try {
-      process.kill(child.pid, 'SIGTERM');
-    } catch {
-      // The Runtime already exited.
-    }
+  } catch {
+    if (child) await terminateFailedRuntime(child);
     await rm(sessionDirectory, { force: true, recursive: true });
-    throw error;
+    throw new ArtifactRuntimeStartError();
   }
 }

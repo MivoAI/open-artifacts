@@ -149,17 +149,32 @@ test('an active local Session reads Artifact source edits in place', async (t) =
   await writeFile(
     join(artifactRoot, 'package.json'),
     `${JSON.stringify({
+      files: ['src', 'input.schema.json', 'example.json', 'tsconfig.json', 'README.md'],
       exports: {
         '.': './src/index.tsx',
+        './schema': './input.schema.json',
         './example': './example.json',
+        './package.json': './package.json',
       },
       name: '@open-artifacts/editable-fixture',
       openArtifacts: { format: 'react-render/v0' },
+      peerDependencies: { react: '^19.0.0' },
       type: 'module',
       version: '0.0.0',
     })}\n`,
   );
-  await writeFile(join(artifactRoot, 'example.json'), '{}\n');
+  await Promise.all([
+    writeFile(join(artifactRoot, 'example.json'), '{}\n'),
+    writeFile(
+      join(artifactRoot, 'input.schema.json'),
+      `${JSON.stringify({
+        $schema: 'https://json-schema.org/draft/2020-12/schema',
+        type: 'object',
+      })}\n`,
+    ),
+    writeFile(join(artifactRoot, 'README.md'), '# Editable fixture\n'),
+    writeFile(join(artifactRoot, 'tsconfig.json'), '{}\n'),
+  ]);
   await writeFile(
     sourcePath,
     `export default function EditableArtifact() { return <h1>source version one</h1>; }\n`,

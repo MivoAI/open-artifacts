@@ -5,7 +5,8 @@ import { dirname, join } from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { resolveLocalArtifactPackage, waitForRuntime } from '../src/cli/run.js';
+import { resolveLocalArtifactPackage } from '../src/cli/artifact-package.js';
+import { waitForRuntime } from '../src/cli/run.js';
 
 const temporaryDirectories: string[] = [];
 
@@ -28,21 +29,38 @@ async function createArtifactFixture(format = 'react-render/v0') {
   await writeFile(
     join(artifactRoot, 'package.json'),
     `${JSON.stringify({
+      files: ['src', 'input.schema.json', 'example.json', 'tsconfig.json', 'README.md'],
       exports: {
         '.': './src/index.tsx',
+        './schema': './input.schema.json',
         './example': './example.json',
+        './package.json': './package.json',
       },
       name: '@open-artifacts/unit-fixture',
       openArtifacts: { format },
+      peerDependencies: { react: '^19.0.0' },
       type: 'module',
       version: '0.0.0',
     })}\n`,
   );
-  await writeFile(join(artifactRoot, 'example.json'), '{"message":"hello"}\n');
-  await writeFile(
-    join(artifactRoot, 'src/index.tsx'),
-    'export default function UnitFixture() { return null; }\n',
-  );
+  await Promise.all([
+    writeFile(join(artifactRoot, 'example.json'), '{"message":"hello"}\n'),
+    writeFile(
+      join(artifactRoot, 'input.schema.json'),
+      `${JSON.stringify({
+        $schema: 'https://json-schema.org/draft/2020-12/schema',
+        type: 'object',
+        required: ['message'],
+        properties: { message: { type: 'string' } },
+      })}\n`,
+    ),
+    writeFile(join(artifactRoot, 'README.md'), '# Unit fixture\n'),
+    writeFile(join(artifactRoot, 'tsconfig.json'), '{}\n'),
+    writeFile(
+      join(artifactRoot, 'src/index.tsx'),
+      'export default function UnitFixture() { return null; }\n',
+    ),
+  ]);
   return { artifactRoot, fixtureRoot };
 }
 
@@ -80,7 +98,7 @@ describe('local Artifact Package resolution', () => {
 
     await expect(
       resolveLocalArtifactPackage(fixture.artifactRoot, fixture.fixtureRoot),
-    ).rejects.toThrow(/Unsupported Artifact Package format/);
+    ).rejects.toThrow(/does not satisfy react-render\/v0/);
   });
 });
 

@@ -67,7 +67,7 @@ allowed.
 ## 5. Schema and example
 
 `input.schema.json` MUST declare JSON Schema draft 2020-12. Its references SHOULD remain package-local.
-`example.json` MUST be valid JSON, SHOULD validate against the schema, and MUST complete a smoke
+`example.json` MUST be valid JSON, MUST validate against the schema, and MUST complete a smoke
 render through the public package export.
 
 Schema validation is a Host responsibility. A package MAY perform additional defensive handling but
