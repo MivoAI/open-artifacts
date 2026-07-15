@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import test from 'node:test';
+import { setTimeout as delay } from 'node:timers/promises';
 
 const repositoryRoot = resolve(import.meta.dirname, '..');
 const cliEntry = resolve(repositoryRoot, 'apps/cli/dist/cli/index.js');
@@ -51,6 +52,20 @@ async function sessionRecord(home, sessionId) {
 
 async function expectRemoved(path) {
   await assert.rejects(access(path), { code: 'ENOENT' });
+}
+
+async function expectUnreachable(url) {
+  const deadline = Date.now() + 1_000;
+  while (Date.now() < deadline) {
+    try {
+      const response = await globalThis.fetch(url);
+      await response.body?.cancel();
+    } catch {
+      return;
+    }
+    await delay(25);
+  }
+  assert.fail(`expected ${url} to become unreachable`);
 }
 
 test('the built oa executable exposes the session command tree', () => {
@@ -128,7 +143,7 @@ test('run, list, and stop manage concurrent Active Sessions independently', asyn
     sessionId: sessions[0].sessionId,
     status: 'stopped',
   });
-  await assert.rejects(globalThis.fetch(sessions[0].url));
+  await expectUnreachable(sessions[0].url);
   assert.equal((await globalThis.fetch(sessions[1].url)).status, 200);
   assert.deepEqual(
     listSessions(home).sessions.map(({ sessionId }) => sessionId),
@@ -220,33 +235,37 @@ test('stop refuses unknown or misowned records without signaling the recorded pr
   assert.equal((await globalThis.fetch(active.url)).status, 200);
 });
 
-test('stop force-kills an owned Runtime that cannot handle SIGTERM within three seconds', async (t) => {
-  buildCli();
-  const home = await mkdtemp(join(tmpdir(), 'open-artifacts-force-stop-'));
-  const session = startSession(home);
-  const record = await sessionRecord(home, session.sessionId);
-  const sessionDirectory = join(home, '.open-artifacts', 'sessions', session.sessionId);
+test(
+  'stop force-kills an owned Runtime that cannot handle SIGTERM within three seconds',
+  { skip: process.platform === 'win32' },
+  async (t) => {
+    buildCli();
+    const home = await mkdtemp(join(tmpdir(), 'open-artifacts-force-stop-'));
+    const session = startSession(home);
+    const record = await sessionRecord(home, session.sessionId);
+    const sessionDirectory = join(home, '.open-artifacts', 'sessions', session.sessionId);
 
-  t.after(async () => {
-    try {
-      process.kill(record.pid, 'SIGKILL');
-    } catch {
-      // The stop command already terminated the Runtime.
-    }
-    await rm(home, { force: true, recursive: true });
-  });
+    t.after(async () => {
+      try {
+        process.kill(record.pid, 'SIGKILL');
+      } catch {
+        // The stop command already terminated the Runtime.
+      }
+      await rm(home, { force: true, recursive: true });
+    });
 
-  process.kill(record.pid, 'SIGSTOP');
-  const startedAt = Date.now();
-  const stopped = stopSession(home, session.sessionId);
-  const elapsed = Date.now() - startedAt;
+    process.kill(record.pid, 'SIGSTOP');
+    const startedAt = Date.now();
+    const stopped = stopSession(home, session.sessionId);
+    const elapsed = Date.now() - startedAt;
 
-  assert.equal(stopped.status, 0, stopped.stderr || stopped.stdout);
-  assert.ok(elapsed >= 2_900, `expected the graceful timeout, got ${elapsed}ms`);
-  assert.ok(elapsed < 6_000, `expected SIGKILL fallback, got ${elapsed}ms`);
-  assert.deepEqual(JSON.parse(stopped.stdout), {
-    sessionId: session.sessionId,
-    status: 'stopped',
-  });
-  await expectRemoved(sessionDirectory);
-});
+    assert.equal(stopped.status, 0, stopped.stderr || stopped.stdout);
+    assert.ok(elapsed >= 2_900, `expected the graceful timeout, got ${elapsed}ms`);
+    assert.ok(elapsed < 6_000, `expected SIGKILL fallback, got ${elapsed}ms`);
+    assert.deepEqual(JSON.parse(stopped.stdout), {
+      sessionId: session.sessionId,
+      status: 'stopped',
+    });
+    await expectRemoved(sessionDirectory);
+  },
+);

@@ -9,16 +9,8 @@ import test from 'node:test';
 import { buildCli, repositoryRoot, runBuiltCli as runCli } from './helpers/cli.mjs';
 
 async function stopSession(home, sessionId) {
-  const sessionDirectory = join(home, '.open-artifacts', 'sessions', sessionId);
-  const record = JSON.parse(await readFile(join(sessionDirectory, 'record.json'), 'utf8'));
-
-  try {
-    process.kill(record.pid, 'SIGTERM');
-  } catch (error) {
-    if (error.code !== 'ESRCH') throw error;
-  }
-
-  await rm(sessionDirectory, { force: true, recursive: true });
+  const result = runCli(['session', 'stop', sessionId, '--json'], { home });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
 }
 
 async function sessionRecord(home, sessionId) {
