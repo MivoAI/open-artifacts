@@ -235,11 +235,10 @@ export function processQueryFailure(error: unknown): 'missing' | 'unavailable' {
   const explicitMissingProcess = /(?:no such process|process id too large|process not found)/i.test(
     standardError,
   );
-  return Number(processError.code) === 1 &&
-    standardOutput === '' &&
-    (standardError === '' || explicitMissingProcess)
-    ? 'missing'
-    : 'unavailable';
+  if (Number(processError.code) !== 1) return 'unavailable';
+  if (standardOutput !== '') return 'unavailable';
+  if (standardError !== '' && !explicitMissingProcess) return 'unavailable';
+  return 'missing';
 }
 
 export async function readProcessSignatureState(
@@ -280,7 +279,9 @@ export async function readProcessSignatureState(
             stat('/proc/self/stat').catch(() => undefined),
             stat(`/proc/${pid}`).catch(() => undefined),
           ]);
-          if (procSelfStat?.isFile() && !processDirectory) return { status: 'missing' };
+          if (procSelfStat?.isFile()) {
+            if (!processDirectory) return { status: 'missing' };
+          }
         }
         // Fall back to a ps implementation available through PATH.
       }
@@ -397,7 +398,8 @@ export async function readRuntimeReadyStateState(
   try {
     const value: unknown = JSON.parse(await read(path));
     const ready = parseRuntimeReadyState(value);
-    return ready ? { ready, status: 'found' } : { status: 'invalid' };
+    if (!ready) return { status: 'invalid' };
+    return { ready, status: 'found' };
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { status: 'missing' };
     if (error instanceof SyntaxError) return { status: 'invalid' };
@@ -423,7 +425,9 @@ async function loadSessionRecord(sessionId: string): Promise<SessionRecordRead> 
       await readFile(resolve(sessionDirectory(sessionId), 'record.json'), 'utf8'),
     );
     const record = parseSessionRecord(value);
-    return record?.sessionId === sessionId ? { record, status: 'found' } : { status: 'invalid' };
+    if (!record) return { status: 'invalid' };
+    if (record.sessionId !== sessionId) return { status: 'invalid' };
+    return { record, status: 'found' };
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { status: 'missing' };
     if (error instanceof SyntaxError) return { status: 'invalid' };
@@ -441,9 +445,8 @@ async function inspectSession(record: SessionRecord) {
 
   const readyState = await loadRuntimeReadyState(record.sessionId);
   if (readyState.status === 'unavailable') return { status: 'hidden' as const };
-  if (readyState.status !== 'found' || !readyMatchesRecord(record, readyState.ready)) {
-    return { status: 'prune' as const };
-  }
+  if (readyState.status !== 'found') return { status: 'prune' as const };
+  if (!readyMatchesRecord(record, readyState.ready)) return { status: 'prune' as const };
   const health = await readHealth(record);
   return { status: health.status === 'matching' ? ('active' as const) : ('hidden' as const) };
 }
@@ -688,7 +691,14 @@ export async function stopArtifactSession(sessionId: string, options: SessionCom
       `Artifact Session ${sessionId} ownership state is temporarily unavailable`,
     );
   }
-  if (readyState.status !== 'found' || !readyMatchesRecord(record, readyState.ready)) {
+  if (readyState.status !== 'found') {
+    await removeSessionRecord(sessionId);
+    throw new SessionLifecycleError(
+      'ARTIFACT_SESSION_OWNERSHIP_MISMATCH',
+      `Process ${record.pid} no longer belongs to this Artifact Session: ${sessionId}`,
+    );
+  }
+  if (!readyMatchesRecord(record, readyState.ready)) {
     await removeSessionRecord(sessionId);
     throw new SessionLifecycleError(
       'ARTIFACT_SESSION_OWNERSHIP_MISMATCH',
