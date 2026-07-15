@@ -1,3 +1,8 @@
+import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
+
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -7,8 +12,29 @@ import {
   packageLockDependencyKey,
   parseNpmArtifactReference,
   sanitizeRegistryUrl,
+  withCacheEntryLock,
   type NpmArtifactProvenance,
 } from '../src/cli/npm-artifact.js';
+
+function deferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
+
+async function ownerDirectories(root: string): Promise<string[]> {
+  const entries = await readdir(root, { withFileTypes: true });
+  const nested = await Promise.all(
+    entries.map(async (entry) => {
+      const path = join(root, entry.name);
+      if (entry.isDirectory()) return ownerDirectories(path);
+      return entry.name === 'owner.json' ? [dirname(path)] : [];
+    }),
+  );
+  return nested.flat();
+}
 
 describe('npm subprocess command', () => {
   it('passes Windows npm arguments through JSON instead of shell interpolation', () => {
@@ -117,6 +143,28 @@ describe('npm dependency lock graph identity', () => {
 
     expect(packageLockGraphDigest(credentialed)).toBe(packageLockGraphDigest(sanitized));
   });
+
+  it('preserves immutable commit identity for transitive Git dependencies', () => {
+    const gitDependency = (commit: string, credentials = '', token = 'secret') => ({
+      lockfileVersion: 3,
+      packages: {
+        'node_modules/root': root,
+        'node_modules/transitive-git': {
+          resolved: `git+https://${credentials}github.com/example/transitive.git?token=${token}#${commit}`,
+          version: '1.0.0',
+        },
+      },
+    });
+    const firstCommit = '1111111111111111111111111111111111111111';
+    const secondCommit = '2222222222222222222222222222222222222222';
+
+    expect(packageLockGraphDigest(gitDependency(firstCommit))).not.toBe(
+      packageLockGraphDigest(gitDependency(secondCommit)),
+    );
+    expect(packageLockGraphDigest(gitDependency(firstCommit, 'user:secret@', 'token-a'))).toBe(
+      packageLockGraphDigest(gitDependency(firstCommit, '', 'token-b')),
+    );
+  });
 });
 
 describe('npm Artifact Reference parsing', () => {
@@ -165,5 +213,63 @@ describe('npm Artifact cache identity', () => {
     expect(artifactCacheKey({ ...provenance, lockGraphDigest: 'sha256-lock-graph-b' })).not.toBe(
       artifactCacheKey(provenance),
     );
+  });
+});
+
+describe('npm Artifact cache locking', () => {
+  it('does not let a stale owner release a successor lock', async () => {
+    const cacheRoot = await mkdtemp(join(tmpdir(), 'open-artifacts-lock-test-'));
+    const firstEntered = deferred();
+    const releaseFirst = deferred();
+    const secondEntered = deferred();
+    const releaseSecond = deferred();
+    const thirdEntered = deferred();
+    const releaseThird = deferred();
+    const operations: Promise<unknown>[] = [];
+
+    try {
+      const firstOperation = withCacheEntryLock(cacheRoot, 'fixture', async () => {
+        firstEntered.resolve();
+        await releaseFirst.promise;
+      });
+      operations.push(firstOperation);
+      await firstEntered.promise;
+
+      const lockRoot = join(cacheRoot, '.fixture.lock');
+      const owners = await ownerDirectories(lockRoot);
+      expect(owners).toHaveLength(1);
+      const [owner] = owners;
+      if (!owner) throw new Error('cache lock owner was not created');
+      const ownerFile = join(owner, 'owner.json');
+      const ownerMetadata = JSON.parse(await readFile(ownerFile, 'utf8'));
+      await writeFile(ownerFile, `${JSON.stringify({ ...ownerMetadata, pid: 2_147_483_647 })}\n`);
+
+      operations.push(
+        withCacheEntryLock(cacheRoot, 'fixture', async () => {
+          secondEntered.resolve();
+          await releaseSecond.promise;
+        }),
+      );
+      await secondEntered.promise;
+
+      operations.push(
+        withCacheEntryLock(cacheRoot, 'fixture', async () => {
+          thirdEntered.resolve();
+          await releaseThird.promise;
+        }),
+      );
+      releaseFirst.resolve();
+      await firstOperation;
+
+      expect(await Promise.race([thirdEntered.promise.then(() => true), delay(150, false)])).toBe(
+        false,
+      );
+    } finally {
+      releaseFirst.resolve();
+      releaseSecond.resolve();
+      releaseThird.resolve();
+      await Promise.allSettled(operations);
+      await rm(cacheRoot, { force: true, recursive: true });
+    }
   });
 });

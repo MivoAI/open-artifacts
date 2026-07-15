@@ -11,6 +11,7 @@ import {
   realpath,
   rename,
   rm,
+  rmdir,
   stat,
   writeFile,
 } from 'node:fs/promises';
@@ -29,7 +30,6 @@ const supportedRegistryTypes = new Set(['range', 'tag', 'version']);
 const defaultRegistry = 'https://registry.npmjs.org/';
 const cacheContentManifestName = 'open-artifacts-content.json';
 const cacheLockWaitMilliseconds = 120_000;
-const cacheLockMaximumAgeMilliseconds = 10 * 60_000;
 const ownerlessCacheLockGraceMilliseconds = 5_000;
 const windowsNpmScript = [
   "$ErrorActionPreference = 'Stop'",
@@ -85,6 +85,23 @@ export function sanitizeRegistryUrl(value: string) {
   }
 }
 
+function sanitizeResolvedUrl(value: string) {
+  try {
+    const url = new URL(value);
+    // A full Git commit is immutable identity; arbitrary fragments may contain credentials.
+    const gitCommit = /^(?:git(?:\+[^:]+)?|ssh):$/.test(url.protocol)
+      ? url.hash.slice(1).match(/^[0-9a-f]{40}(?:[0-9a-f]{24})?$/i)?.[0]
+      : undefined;
+    url.username = '';
+    url.password = '';
+    url.search = '';
+    url.hash = gitCommit?.toLowerCase() ?? '';
+    return url.href;
+  } catch {
+    return 'invalid-url';
+  }
+}
+
 function sanitizeResolvedUrls(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(sanitizeResolvedUrls);
   if (!value || typeof value !== 'object') return value;
@@ -92,7 +109,7 @@ function sanitizeResolvedUrls(value: unknown): unknown {
     Object.entries(value).map(([key, nestedValue]) => [
       key,
       key === 'resolved' && typeof nestedValue === 'string'
-        ? sanitizeRegistryUrl(nestedValue)
+        ? sanitizeResolvedUrl(nestedValue)
         : sanitizeResolvedUrls(nestedValue),
     ]),
   );
@@ -512,72 +529,144 @@ async function installCacheEntry(
   }
 }
 
-async function withCacheEntryLock<T>(cacheRoot: string, cacheKey: string, work: () => Promise<T>) {
-  const lockPath = join(cacheRoot, `.${cacheKey}.lock`);
+export async function withCacheEntryLock<T>(
+  cacheRoot: string,
+  cacheKey: string,
+  work: () => Promise<T>,
+) {
+  const lockRoot = join(cacheRoot, `.${cacheKey}.lock`);
+  // A claim path is never reused, so stale cleanup and release cannot target a successor owner.
+  const ownerToken = `owner-${randomUUID()}`;
+  const ownerPath = join(lockRoot, ownerToken);
+  const acquiredPath = join(ownerPath, 'acquired');
   const deadline = Date.now() + cacheLockWaitMilliseconds;
 
-  async function removeStaleLock() {
-    const owner = await readFile(join(lockPath, 'owner.json'), 'utf8')
-      .then((contents) => JSON.parse(contents) as { createdAt?: string; pid?: number })
+  async function readOwner(path: string) {
+    return readFile(join(path, 'owner.json'), 'utf8')
+      .then(
+        (contents) => JSON.parse(contents) as { createdAt?: string; pid?: number; token?: string },
+      )
       .catch(() => undefined);
-    const lockMetadata = await stat(lockPath).catch(() => undefined);
-    const lockAge = lockMetadata ? Date.now() - lockMetadata.mtimeMs : 0;
-    let ownerIsAlive = false;
-    if (
-      owner?.pid &&
-      Number.isSafeInteger(owner.pid) &&
-      lockAge < cacheLockMaximumAgeMilliseconds
-    ) {
+  }
+
+  async function claimIsAlive(claimPath: string, token: string) {
+    const [owner, metadata] = await Promise.all([
+      readOwner(claimPath),
+      stat(claimPath).catch(() => undefined),
+    ]);
+    if (!metadata) return false;
+    const age = Date.now() - metadata.mtimeMs;
+    if (owner?.token === token && owner.pid && Number.isSafeInteger(owner.pid)) {
       try {
         process.kill(owner.pid, 0);
-        ownerIsAlive = true;
+        return true;
       } catch (error) {
-        ownerIsAlive = !(error instanceof Error && 'code' in error && error.code === 'ESRCH');
+        return !(error instanceof Error && 'code' in error && error.code === 'ESRCH');
       }
-    } else {
-      ownerIsAlive = Boolean(
-        lockMetadata && Date.now() - lockMetadata.mtimeMs < ownerlessCacheLockGraceMilliseconds,
-      );
     }
-    if (ownerIsAlive) return;
+    return age < ownerlessCacheLockGraceMilliseconds;
+  }
 
-    const quarantinePath = join(cacheRoot, `.${cacheKey}.stale-${randomUUID()}`);
+  async function quarantineClaim(token: string) {
+    const claimPath = join(lockRoot, token);
+    const owner = await readOwner(claimPath);
+    if (owner && owner.token !== token) return;
+
+    const quarantinePath = join(cacheRoot, `.${cacheKey}.stale-${token}-${randomUUID()}`);
     try {
-      await rename(lockPath, quarantinePath);
+      await rename(claimPath, quarantinePath);
+      const quarantinedOwner = await readOwner(quarantinePath);
+      if (owner?.token && quarantinedOwner?.token !== owner.token) {
+        await rename(quarantinePath, claimPath).catch(() => undefined);
+        return;
+      }
       await rm(quarantinePath, { force: true, recursive: true });
     } catch (error) {
       if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error;
     }
   }
 
-  while (true) {
-    try {
-      await mkdir(lockPath);
-    } catch (error) {
-      if (!(error instanceof Error && 'code' in error && error.code === 'EEXIST')) throw error;
-      await removeStaleLock();
-      if (Date.now() >= deadline) {
-        throw new ArtifactReferenceError('Timed out waiting for the npm Artifact cache lock');
+  async function activeClaims() {
+    const entries = await readdir(lockRoot, { withFileTypes: true });
+    const claims: Array<{ acquired: boolean; token: string }> = [];
+    for (const entry of entries) {
+      if (!entry.isDirectory() || !entry.name.startsWith('owner-')) continue;
+      const claimPath = join(lockRoot, entry.name);
+      if (!(await claimIsAlive(claimPath, entry.name))) {
+        await quarantineClaim(entry.name);
+        continue;
       }
-      await delay(25);
-      continue;
+      claims.push({
+        acquired: Boolean(await stat(join(claimPath, 'acquired')).catch(() => undefined)),
+        token: entry.name,
+      });
     }
+    return claims.sort((left, right) =>
+      left.token < right.token ? -1 : left.token > right.token ? 1 : 0,
+    );
+  }
+
+  async function releaseOwnerClaim() {
+    if ((await readOwner(ownerPath))?.token === ownerToken) {
+      await rm(ownerPath, { force: true, recursive: true });
+    }
+    await rmdir(lockRoot).catch((error) => {
+      if (!(
+        error instanceof Error &&
+        'code' in error &&
+        (error.code === 'ENOENT' || error.code === 'ENOTEMPTY')
+      )) {
+        throw error;
+      }
+    });
+  }
+
+  while (true) {
+    await mkdir(lockRoot, { recursive: true });
     try {
-      await writeFile(
-        join(lockPath, 'owner.json'),
-        `${JSON.stringify({ createdAt: new Date().toISOString(), pid: process.pid })}\n`,
-      );
+      await mkdir(ownerPath);
       break;
     } catch (error) {
-      await rm(lockPath, { force: true, recursive: true });
-      throw error;
+      if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error;
     }
   }
 
   try {
+    await writeFile(
+      join(ownerPath, 'owner.json'),
+      `${JSON.stringify({
+        createdAt: new Date().toISOString(),
+        pid: process.pid,
+        token: ownerToken,
+      })}\n`,
+    );
+
+    while (true) {
+      const claims = await activeClaims();
+      const ownClaim = claims.find(({ token }) => token === ownerToken);
+      if (!ownClaim) {
+        throw new ArtifactReferenceError('Lost ownership of the npm Artifact cache lock');
+      }
+      const anotherOwnerHasLock = claims.some(
+        ({ acquired, token }) => acquired && token !== ownerToken,
+      );
+      if (ownClaim.acquired) {
+        if (claims[0]?.token === ownerToken) break;
+        await rm(acquiredPath, { force: true });
+      } else if (!anotherOwnerHasLock && claims[0]?.token === ownerToken) {
+        await writeFile(acquiredPath, `${ownerToken}\n`);
+        continue;
+      }
+
+      if (Date.now() >= deadline) {
+        throw new ArtifactReferenceError('Timed out waiting for the npm Artifact cache lock');
+      }
+      await delay(25);
+    }
+
     return await work();
   } finally {
-    await rm(lockPath, { force: true, recursive: true });
+    await releaseOwnerClaim();
   }
 }
 
