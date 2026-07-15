@@ -9,16 +9,14 @@ import test from 'node:test';
 import { buildCli, repositoryRoot, runBuiltCli as runCli } from './helpers/cli.mjs';
 
 async function stopSession(home, sessionId) {
-  const sessionDirectory = join(home, '.open-artifacts', 'sessions', sessionId);
-  const record = JSON.parse(await readFile(join(sessionDirectory, 'record.json'), 'utf8'));
+  const result = runCli(['session', 'stop', sessionId, '--json'], { home });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+}
 
-  try {
-    process.kill(record.pid, 'SIGTERM');
-  } catch (error) {
-    if (error.code !== 'ESRCH') throw error;
-  }
-
-  await rm(sessionDirectory, { force: true, recursive: true });
+async function sessionRecord(home, sessionId) {
+  return JSON.parse(
+    await readFile(join(home, '.open-artifacts', 'sessions', sessionId, 'record.json'), 'utf8'),
+  );
 }
 
 async function waitForSource(url, expected) {
@@ -91,6 +89,7 @@ test('oa run starts local Artifact Packages from relative and absolute reference
     assert.equal(healthResponse.status, 200);
     assert.deepEqual(await healthResponse.json(), {
       artifact: reference.name,
+      instanceId: (await sessionRecord(home, session.sessionId)).instanceId,
       sessionId: session.sessionId,
       status: 'active',
     });

@@ -1,5 +1,7 @@
-import { readFile, rm, writeFile } from 'node:fs/promises';
+import { createHash, timingSafeEqual } from 'node:crypto';
+import { mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import type { AddressInfo } from 'node:net';
+import { isAbsolute, relative, resolve, sep } from 'node:path';
 
 import { createServer, normalizePath } from 'vite';
 import type { Plugin } from 'vite';
@@ -10,22 +12,101 @@ import { reactAliases, reactRuntimeDirectory } from './react.js';
 
 const virtualEntryId = 'virtual:open-artifacts-session-entry';
 const resolvedVirtualEntryId = `\0${virtualEntryId}`;
-function artifactSessionPlugin(config: SessionRuntimeConfig): Plugin {
+
+function fileSystemRequestPath(requestUrl: string | undefined) {
+  try {
+    const pathname = decodeURIComponent(new URL(requestUrl ?? '/', 'http://127.0.0.1').pathname);
+    if (!pathname.startsWith('/@fs/')) return undefined;
+    return pathname.slice('/@fs/'.length);
+  } catch {
+    return undefined;
+  }
+}
+
+function isWithinDirectory(directory: string, candidate: string) {
+  const relativePath = relative(resolve(directory), resolve(candidate));
+  if (relativePath === '') return true;
+  if (isAbsolute(relativePath)) return false;
+  if (relativePath === '..') return false;
+  if (relativePath.startsWith(`..${sep}`)) return false;
+  return true;
+}
+
+async function isSessionControlPath(sessionDirectory: string, candidate: string) {
+  if (isWithinDirectory(sessionDirectory, candidate)) return true;
+  const resolvedCandidate = await realpath(candidate).catch(() => undefined);
+  if (!resolvedCandidate) return false;
+  const resolvedSessionDirectory = await realpath(sessionDirectory).catch(() =>
+    resolve(sessionDirectory),
+  );
+  return isWithinDirectory(resolvedSessionDirectory, resolvedCandidate);
+}
+
+function tokenMatches(expected: string, authorization: string | undefined) {
+  if (!authorization?.startsWith('Bearer ')) return false;
+  const provided = authorization.slice('Bearer '.length);
+  const expectedBuffer = Buffer.from(expected);
+  const providedBuffer = Buffer.from(provided);
+  return (
+    expectedBuffer.length === providedBuffer.length &&
+    timingSafeEqual(expectedBuffer, providedBuffer)
+  );
+}
+
+function artifactSessionPlugin(
+  config: SessionRuntimeConfig,
+  instanceToken: string,
+  requestShutdown: () => void,
+): Plugin {
   const entryUrl = `/@fs/${normalizePath(config.artifact.entryPath)}`;
 
   return {
     name: 'open-artifacts-session',
     configureServer(server) {
+      server.middlewares.use((request, response, next) => {
+        const requestedPath = fileSystemRequestPath(request.url);
+        if (!requestedPath) {
+          next();
+          return;
+        }
+        void isSessionControlPath(config.sessionDirectory, requestedPath)
+          .then((isControlPath) => {
+            if (!isControlPath) {
+              next();
+              return;
+            }
+            response.statusCode = 403;
+            response.end('Session control files are not browser-accessible.');
+          })
+          .catch(next);
+      });
       server.middlewares.use('/__oa/health', (_request, response) => {
         response.statusCode = 200;
         response.setHeader('content-type', 'application/json');
         response.end(
           JSON.stringify({
             artifact: config.artifact.name,
+            instanceId: config.instanceId,
             sessionId: config.sessionId,
             status: 'active',
           }),
         );
+      });
+      server.middlewares.use('/__oa/shutdown', (request, response) => {
+        if (request.method !== 'POST') {
+          response.statusCode = 405;
+          response.setHeader('allow', 'POST');
+          response.end();
+          return;
+        }
+        if (!tokenMatches(instanceToken, request.headers.authorization)) {
+          response.statusCode = 401;
+          response.end();
+          return;
+        }
+        response.statusCode = 202;
+        response.end();
+        setImmediate(requestShutdown);
       });
       server.middlewares.use('/__oa/preflight', async (_request, response) => {
         try {
@@ -66,9 +147,11 @@ createRoot(root).render(createElement(Render, { data }));
   };
 }
 
-async function startRuntime(config: SessionRuntimeConfig) {
+async function startRuntime(config: SessionRuntimeConfig, instanceToken: string) {
+  const renderRoot = resolve(config.sessionDirectory, 'render');
+  await mkdir(renderRoot, { recursive: true });
   await writeFile(
-    `${config.sessionDirectory}/index.html`,
+    resolve(renderRoot, 'index.html'),
     `<!doctype html>
 <html lang="en">
   <head>
@@ -89,31 +172,34 @@ async function startRuntime(config: SessionRuntimeConfig) {
 `,
   );
 
+  let shuttingDown = false;
+  const shutdown = async () => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    await server.close();
+    await rm(config.readyFile, { force: true });
+    process.exit(0);
+  };
+
   const server = await createServer({
     appType: 'spa',
     clearScreen: false,
     logLevel: 'silent',
-    plugins: [artifactSessionPlugin(config)],
+    plugins: [artifactSessionPlugin(config, instanceToken, () => void shutdown())],
     resolve: {
       alias: reactAliases(),
       dedupe: ['react', 'react-dom'],
     },
-    root: config.sessionDirectory,
+    root: renderRoot,
     server: {
       fs: {
-        allow: [config.artifact.root, config.sessionDirectory, reactRuntimeDirectory()],
+        allow: [config.artifact.root, renderRoot, reactRuntimeDirectory()],
       },
       host: '127.0.0.1',
       port: 0,
       strictPort: false,
     },
   });
-
-  const shutdown = async () => {
-    await server.close();
-    await rm(config.readyFile, { force: true });
-    process.exit(0);
-  };
 
   process.once('SIGINT', () => void shutdown());
   process.once('SIGTERM', () => void shutdown());
@@ -124,12 +210,16 @@ async function startRuntime(config: SessionRuntimeConfig) {
 
   await writeFile(
     config.readyFile,
-    `${JSON.stringify({ pid: process.pid, url: `http://127.0.0.1:${address.port}/` })}\n`,
+    `${JSON.stringify({ instanceId: config.instanceId, pid: process.pid, url: `http://127.0.0.1:${address.port}/` })}\n`,
   );
 }
 
 const configPath = process.argv[2];
-if (!configPath) throw new Error('local runtime requires a config path');
+if (!configPath) throw new Error('Artifact Session Runtime requires a config path');
 
 const config = JSON.parse(await readFile(configPath, 'utf8')) as SessionRuntimeConfig;
-await startRuntime(config);
+const instanceToken = (await readFile(config.instanceSecretFile, 'utf8')).trim();
+if (createHash('sha256').update(instanceToken).digest('hex') !== config.instanceId) {
+  throw new Error('Artifact Session Runtime instance token mismatch');
+}
+await startRuntime(config, instanceToken);

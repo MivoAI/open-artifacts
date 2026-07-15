@@ -4,6 +4,7 @@ import { Command } from 'commander';
 
 import { writeCliError } from './errors.js';
 import { runArtifactPackage } from './run.js';
+import { listArtifactSessions, stopArtifactSession } from './session.js';
 
 const program = new Command();
 
@@ -38,5 +39,34 @@ runCommand.addHelpText(
   'after',
   '\nSecurity: oa executes trusted Artifact Source without a security sandbox.\n',
 );
+
+const session = program.command('session').description('Manage Active Artifact Sessions');
+
+session
+  .command('list')
+  .description('List reachable Active Sessions')
+  .option('--json', 'emit stable machine-readable output', false)
+  .action(async (options: { json: boolean }) => {
+    try {
+      await listArtifactSessions(options);
+    } catch (error) {
+      writeCliError(error, options.json);
+      process.exitCode = 1;
+    }
+  });
+
+session
+  .command('stop')
+  .description('Stop one Artifact Session')
+  .argument('<id>', 'required Session ID')
+  .option('--json', 'emit stable machine-readable output', false)
+  .action(async (id: string, options: { json: boolean }) => {
+    try {
+      await stopArtifactSession(id, options);
+    } catch (error) {
+      writeCliError(error, options.json);
+      process.exitCode = 1;
+    }
+  });
 
 await program.parseAsync();
