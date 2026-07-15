@@ -1,11 +1,21 @@
-import { describe, expect, it } from 'vitest';
+import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   healthMatchesRecord,
   parseLinuxProcessSignature,
   parseProcessSignatureOutput,
+  parseRuntimeReadyState,
   parseSessionRecord,
   parseWindowsProcessSignatureOutput,
+  publishJsonAtomically,
+  readyMatchesRecord,
+  settleWithin,
+  stopOwnedRuntimeProcess,
+  waitUntilProcessChanges,
 } from '../src/cli/session.js';
 
 const record = {
@@ -39,6 +49,29 @@ describe('Session Record validation', () => {
     [{ ...record, url: 'https://example.com/' }],
   ])('rejects an unsafe record', (value) => {
     expect(parseSessionRecord(value)).toBeUndefined();
+  });
+
+  it('publishes complete records with a same-directory atomic rename', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'open-artifacts-record-'));
+    const path = join(directory, 'record.json');
+    const values = Array.from({ length: 40 }, (_, index) => ({ index, payload: 'x'.repeat(512) }));
+    await publishJsonAtomically(path, values[0]);
+    let reading = true;
+    const reader = (async () => {
+      while (reading) JSON.parse(await readFile(path, 'utf8'));
+    })();
+
+    try {
+      await Promise.all(values.map((value) => publishJsonAtomically(path, value)));
+      reading = false;
+      await reader;
+      expect(values).toContainEqual(JSON.parse(await readFile(path, 'utf8')));
+      expect((await readdir(directory)).filter((name) => name.endsWith('.tmp'))).toEqual([]);
+    } finally {
+      reading = false;
+      await reader;
+      await rm(directory, { force: true, recursive: true });
+    }
   });
 });
 
@@ -122,5 +155,49 @@ describe('process and health ownership', () => {
         status: 'active',
       }),
     ).toBe(false);
+  });
+
+  it('requires the Runtime-written ready pid, instance, and URL to match together', () => {
+    const ready = parseRuntimeReadyState({
+      instanceId: record.instanceId,
+      pid: record.pid,
+      url: record.url,
+    });
+    expect(ready).toBeDefined();
+    expect(readyMatchesRecord(record, ready!)).toBe(true);
+    expect(readyMatchesRecord(record, { ...ready!, pid: record.pid + 1 })).toBe(false);
+  });
+
+  it('bounds a stalled process query by the shared stop deadline', async () => {
+    const startedAt = Date.now();
+    await expect(
+      waitUntilProcessChanges(record, Date.now() + 25, async () => new Promise(() => undefined)),
+    ).resolves.toBe(false);
+    expect(Date.now() - startedAt).toBeLessThan(250);
+    await expect(settleWithin(new Promise(() => undefined), 10)).resolves.toBeUndefined();
+  });
+
+  it('reports a force-stop failure when the same process remains after SIGKILL', async () => {
+    const kill = vi.fn();
+    const readState = async () => ({
+      signature: record.processSignature,
+      status: 'found' as const,
+    });
+
+    await expect(
+      stopOwnedRuntimeProcess(
+        record,
+        { instanceId: record.instanceId, pid: record.pid, url: record.url },
+        'a'.repeat(64),
+        {
+          forceTimeoutMs: 10,
+          gracefulTimeoutMs: 10,
+          kill,
+          readState,
+          requestShutdown: async () => true,
+        },
+      ),
+    ).resolves.toBe(false);
+    expect(kill).toHaveBeenCalledWith(record.pid, 'SIGKILL');
   });
 });

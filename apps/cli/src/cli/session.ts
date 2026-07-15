@@ -1,14 +1,19 @@
 import { execFile } from 'node:child_process';
-import { readdir, readFile, rm, unlink } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { readdir, readFile, rename, rm, unlink, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';
 import { promisify } from 'node:util';
 
-import type { ArtifactIdentity } from '../runtime/config.js';
+import type { ArtifactIdentity, RuntimeReadyState } from '../runtime/config.js';
 import { CliError } from './errors.js';
 
 const execFileAsync = promisify(execFile);
 const sessionIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const processQueryTimeoutMs = 500;
+const healthTimeoutMs = 750;
+const gracefulShutdownTimeoutMs = 3_000;
+const forceShutdownTimeoutMs = 1_000;
 
 export interface ProcessSignature {
   command: string;
@@ -39,7 +44,14 @@ interface SessionCommandOptions {
 }
 
 type SessionLifecycleErrorCode =
-  'ARTIFACT_SESSION_NOT_FOUND' | 'ARTIFACT_SESSION_OWNERSHIP_MISMATCH';
+  | 'ARTIFACT_SESSION_NOT_FOUND'
+  | 'ARTIFACT_SESSION_OWNERSHIP_MISMATCH'
+  | 'ARTIFACT_SESSION_STOP_FAILED';
+
+export type ProcessSignatureState =
+  | { signature: ProcessSignature; status: 'found' }
+  | { status: 'missing' }
+  | { status: 'unavailable' };
 
 export class SessionLifecycleError extends CliError {
   constructor(code: SessionLifecycleErrorCode, message: string) {
@@ -102,6 +114,25 @@ export function parseSessionRecord(value: unknown): SessionRecord | undefined {
   return value as unknown as SessionRecord;
 }
 
+export function parseRuntimeReadyState(value: unknown): RuntimeReadyState | undefined {
+  if (
+    !isRecord(value) ||
+    !isNonEmptyString(value.instanceId) ||
+    !Number.isSafeInteger(value.pid) ||
+    (value.pid as number) <= 0 ||
+    !isLoopbackSessionUrl(value.url)
+  ) {
+    return undefined;
+  }
+  return value as unknown as RuntimeReadyState;
+}
+
+export function readyMatchesRecord(record: SessionRecord, ready: RuntimeReadyState): boolean {
+  return (
+    ready.instanceId === record.instanceId && ready.pid === record.pid && ready.url === record.url
+  );
+}
+
 export function parseProcessSignatureOutput(output: string): ProcessSignature | undefined {
   const match = /^\s*(\d+)\s+(\S+\s+\S+\s+\d{1,2}\s+\S+\s+\d{4})\s+(.+?)\s*$/.exec(output);
   if (!match) return undefined;
@@ -154,19 +185,57 @@ export function parseWindowsProcessSignatureOutput(output: string): ProcessSigna
   }
 }
 
-async function readLinuxProcessSignature(pid: number) {
-  const [statOutput, statusOutput, commandOutput] = await Promise.all([
-    readFile(`/proc/${pid}/stat`, 'utf8'),
-    readFile(`/proc/${pid}/status`, 'utf8'),
-    readFile(`/proc/${pid}/cmdline`, 'utf8'),
-  ]);
+export function remainingTimeout(deadline: number, now = Date.now()): number {
+  return Math.max(0, deadline - now);
+}
+
+export async function settleWithin<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+): Promise<T | undefined> {
+  if (timeoutMs <= 0) return undefined;
+  let timeoutId: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<undefined>((resolveTimeout) => {
+        timeoutId = setTimeout(() => resolveTimeout(undefined), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+}
+
+async function readLinuxProcessSignature(pid: number, timeoutMs: number) {
+  const outputs = await settleWithin(
+    Promise.all([
+      readFile(`/proc/${pid}/stat`, 'utf8'),
+      readFile(`/proc/${pid}/status`, 'utf8'),
+      readFile(`/proc/${pid}/cmdline`, 'utf8'),
+    ]),
+    timeoutMs,
+  );
+  if (!outputs) return undefined;
+  const [statOutput, statusOutput, commandOutput] = outputs;
   return parseLinuxProcessSignature(statOutput, statusOutput, commandOutput);
 }
 
-export async function readProcessSignature(
+function processQueryFailure(error: unknown): 'missing' | 'unavailable' {
+  const processError = error as NodeJS.ErrnoException & { killed?: boolean };
+  if (processError.code === 'ETIMEDOUT' || processError.killed) return 'unavailable';
+  if (processError.code === 'ENOENT') return 'unavailable';
+  return processError.code === 'ESRCH' || Number(processError.code) === 1
+    ? 'missing'
+    : 'unavailable';
+}
+
+export async function readProcessSignatureState(
   pid: number,
   platform: NodeJS.Platform = process.platform,
-): Promise<ProcessSignature | undefined> {
+  timeoutMs = processQueryTimeoutMs,
+): Promise<ProcessSignatureState> {
+  const deadline = Date.now() + Math.max(1, timeoutMs);
   try {
     if (platform === 'win32') {
       const script = [
@@ -175,35 +244,60 @@ export async function readProcessSignature(
         '$owner = Invoke-CimMethod -InputObject $process -MethodName GetOwnerSid',
         '[pscustomobject]@{ CommandLine = $process.CommandLine; CreationDate = $process.CreationDate; OwnerSid = $owner.Sid } | ConvertTo-Json -Compress',
       ].join('; ');
-      const { stdout } = await execFileAsync(
-        'powershell.exe',
-        ['-NoProfile', '-NonInteractive', '-Command', script],
-        { encoding: 'utf8' },
+      const timeout = remainingTimeout(deadline);
+      const result = await settleWithin(
+        execFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], {
+          encoding: 'utf8',
+          timeout,
+        }),
+        timeout,
       );
-      return parseWindowsProcessSignatureOutput(stdout);
+      if (!result) return { status: 'unavailable' };
+      const signature = parseWindowsProcessSignatureOutput(result.stdout);
+      return signature ? { signature, status: 'found' } : { status: 'unavailable' };
     }
 
     if (platform === 'linux') {
       try {
-        const signature = await readLinuxProcessSignature(pid);
-        if (signature) return signature;
-      } catch {
+        const signature = await readLinuxProcessSignature(pid, remainingTimeout(deadline));
+        if (signature) return { signature, status: 'found' };
+        if (remainingTimeout(deadline) === 0) return { status: 'unavailable' };
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { status: 'missing' };
         // Fall back to a ps implementation available through PATH.
       }
     }
 
-    const { stdout } = await execFileAsync(
-      'ps',
-      ['-ww', '-p', String(pid), '-o', 'uid=', '-o', 'lstart=', '-o', 'command='],
-      {
-        encoding: 'utf8',
-        env: { ...process.env, LC_ALL: 'C', TZ: 'UTC' },
-      },
+    const timeout = remainingTimeout(deadline);
+    if (timeout === 0) return { status: 'unavailable' };
+
+    const result = await settleWithin(
+      execFileAsync(
+        'ps',
+        ['-ww', '-p', String(pid), '-o', 'uid=', '-o', 'lstart=', '-o', 'command='],
+        {
+          encoding: 'utf8',
+          env: { ...process.env, LC_ALL: 'C', TZ: 'UTC' },
+          timeout,
+        },
+      ),
+      timeout,
     );
-    return parseProcessSignatureOutput(stdout);
-  } catch {
-    return undefined;
+    if (!result) return { status: 'unavailable' };
+    const signature = parseProcessSignatureOutput(result.stdout);
+    return signature ? { signature, status: 'found' } : { status: 'missing' };
+  } catch (error) {
+    return { status: processQueryFailure(error) };
   }
+}
+
+export async function readProcessSignature(
+  pid: number,
+  platform: NodeJS.Platform = process.platform,
+  timeoutMs = processQueryTimeoutMs,
+): Promise<ProcessSignature | undefined> {
+  const state = await readProcessSignatureState(pid, platform, timeoutMs);
+  return state.status === 'found' ? state.signature : undefined;
 }
 
 function signaturesMatch(left: ProcessSignature, right: ProcessSignature) {
@@ -224,15 +318,24 @@ export function healthMatchesRecord(record: SessionRecord, health: unknown): boo
   );
 }
 
-async function readHealth(record: SessionRecord): Promise<unknown> {
+async function readHealth(record: SessionRecord) {
+  let response: Response;
   try {
-    const response = await fetch(new URL('__oa/health', record.url), {
-      signal: AbortSignal.timeout(750),
+    response = await fetch(new URL('__oa/health', record.url), {
+      signal: AbortSignal.timeout(healthTimeoutMs),
     });
-    if (!response.ok) return undefined;
-    return await response.json();
   } catch {
-    return undefined;
+    return { status: 'unreachable' as const };
+  }
+
+  if (!response.ok) return { status: 'mismatch' as const };
+  try {
+    const health: unknown = await response.json();
+    return {
+      status: healthMatchesRecord(record, health) ? ('matching' as const) : ('mismatch' as const),
+    };
+  } catch {
+    return { status: 'mismatch' as const };
   }
 }
 
@@ -252,6 +355,33 @@ async function removeSessionRecord(sessionId: string) {
   await unlink(resolve(sessionDirectory(sessionId), 'record.json')).catch(() => undefined);
 }
 
+export async function publishJsonAtomically(path: string, value: unknown) {
+  const temporaryPath = `${path}.${process.pid}.${randomUUID()}.tmp`;
+  try {
+    await writeFile(temporaryPath, `${JSON.stringify(value, null, 2)}\n`, {
+      encoding: 'utf8',
+      flag: 'wx',
+      mode: 0o600,
+    });
+    await rename(temporaryPath, path);
+  } finally {
+    await unlink(temporaryPath).catch(() => undefined);
+  }
+}
+
+export async function readRuntimeReadyState(path: string): Promise<RuntimeReadyState | undefined> {
+  try {
+    const value: unknown = JSON.parse(await readFile(path, 'utf8'));
+    return parseRuntimeReadyState(value);
+  } catch {
+    return undefined;
+  }
+}
+
+async function loadRuntimeReadyState(sessionId: string) {
+  return readRuntimeReadyState(resolve(sessionDirectory(sessionId), 'ready.json'));
+}
+
 async function loadSessionRecord(sessionId: string): Promise<SessionRecord | undefined> {
   try {
     const value: unknown = JSON.parse(
@@ -264,17 +394,18 @@ async function loadSessionRecord(sessionId: string): Promise<SessionRecord | und
   }
 }
 
-async function verifyOwnedProcess(record: SessionRecord) {
-  const signature = await readProcessSignature(record.pid);
-  return Boolean(signature && signaturesMatch(record.processSignature, signature));
-}
+async function inspectSession(record: SessionRecord) {
+  const processState = await readProcessSignatureState(record.pid);
+  if (processState.status === 'missing') return { status: 'prune' as const };
+  if (processState.status === 'unavailable') return { status: 'hidden' as const };
+  if (!signaturesMatch(record.processSignature, processState.signature)) {
+    return { status: 'prune' as const };
+  }
 
-async function verifyOwnedActiveSession(record: SessionRecord) {
-  const [ownedProcess, health] = await Promise.all([
-    verifyOwnedProcess(record),
-    readHealth(record),
-  ]);
-  return ownedProcess && healthMatchesRecord(record, health);
+  const ready = await loadRuntimeReadyState(record.sessionId);
+  if (!ready || !readyMatchesRecord(record, ready)) return { status: 'prune' as const };
+  const health = await readHealth(record);
+  return { status: health.status === 'matching' ? ('active' as const) : ('hidden' as const) };
 }
 
 function activeSessionFromRecord(record: SessionRecord): ActiveSession {
@@ -298,10 +429,13 @@ export async function findActiveSessions(): Promise<ActiveSession[]> {
       .filter((entry) => entry.isDirectory())
       .map(async (entry) => {
         const record = await loadSessionRecord(entry.name);
-        if (!record || !(await verifyOwnedActiveSession(record))) {
+        if (!record) return undefined;
+        const inspection = await inspectSession(record);
+        if (inspection.status === 'prune') {
           await removeSessionRecord(entry.name);
           return undefined;
         }
+        if (inspection.status === 'hidden') return undefined;
         return activeSessionFromRecord(record);
       }),
   );
@@ -336,14 +470,117 @@ export async function listArtifactSessions(options: SessionCommandOptions) {
   process.stdout.write(`Active Artifact Sessions\n${lines.join('\n')}\n`);
 }
 
-async function waitUntilProcessChanges(record: SessionRecord, timeoutMs: number) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    const signature = await readProcessSignature(record.pid);
-    if (!signature || !signaturesMatch(record.processSignature, signature)) return true;
-    await new Promise((resolveDelay) => setTimeout(resolveDelay, 50));
+type ProcessStateReader = (pid: number, timeoutMs: number) => Promise<ProcessSignatureState>;
+
+async function readProcessStateWithin(
+  pid: number,
+  deadline: number,
+  readState: ProcessStateReader,
+): Promise<ProcessSignatureState> {
+  const timeout = Math.min(processQueryTimeoutMs, remainingTimeout(deadline));
+  if (timeout === 0) return { status: 'unavailable' };
+  return (
+    (await settleWithin(readState(pid, timeout), timeout)) ?? { status: 'unavailable' as const }
+  );
+}
+
+export async function waitUntilProcessChanges(
+  record: SessionRecord,
+  deadline: number,
+  readState: ProcessStateReader = (pid, timeoutMs) =>
+    readProcessSignatureState(pid, process.platform, timeoutMs),
+) {
+  while (remainingTimeout(deadline) > 0) {
+    const state = await readProcessStateWithin(record.pid, deadline, readState);
+    if (state.status === 'missing') return true;
+    if (state.status === 'found' && !signaturesMatch(record.processSignature, state.signature)) {
+      return true;
+    }
+    const delay = Math.min(50, remainingTimeout(deadline));
+    if (delay > 0) await new Promise((resolveDelay) => setTimeout(resolveDelay, delay));
   }
   return false;
+}
+
+export async function requestRuntimeShutdown(
+  ready: RuntimeReadyState,
+  token: string | undefined,
+  timeoutMs = healthTimeoutMs,
+) {
+  if (!token || timeoutMs <= 0) return false;
+  try {
+    const response = await fetch(new URL('__oa/shutdown', ready.url), {
+      headers: { authorization: `Bearer ${token}` },
+      method: 'POST',
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    await response.body?.cancel();
+    return response.status === 202;
+  } catch {
+    return false;
+  }
+}
+
+async function readInstanceToken(sessionId: string) {
+  try {
+    const token = (
+      await readFile(resolve(sessionDirectory(sessionId), 'instance.secret'), 'utf8')
+    ).trim();
+    return /^[0-9a-f]{64}$/i.test(token) ? token : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+interface StopRuntimeOptions {
+  forceTimeoutMs?: number;
+  gracefulTimeoutMs?: number;
+  kill?: (pid: number, signal: NodeJS.Signals) => void;
+  readState?: ProcessStateReader;
+  requestShutdown?: typeof requestRuntimeShutdown;
+}
+
+export async function stopOwnedRuntimeProcess(
+  record: SessionRecord,
+  ready: RuntimeReadyState,
+  token: string | undefined,
+  options: StopRuntimeOptions = {},
+) {
+  const readState =
+    options.readState ??
+    ((pid: number, timeoutMs: number) =>
+      readProcessSignatureState(pid, process.platform, timeoutMs));
+  const kill = options.kill ?? ((pid, signal) => process.kill(pid, signal));
+  const gracefulDeadline = Date.now() + (options.gracefulTimeoutMs ?? gracefulShutdownTimeoutMs);
+  const shutdownTimeout = Math.min(healthTimeoutMs, remainingTimeout(gracefulDeadline));
+  await settleWithin(
+    (options.requestShutdown ?? requestRuntimeShutdown)(ready, token, shutdownTimeout),
+    shutdownTimeout,
+  );
+
+  if (await waitUntilProcessChanges(record, gracefulDeadline, readState)) return true;
+
+  const signalState = await readProcessStateWithin(
+    record.pid,
+    Date.now() + processQueryTimeoutMs,
+    readState,
+  );
+  if (signalState.status === 'missing') return true;
+  if (signalState.status === 'unavailable') return false;
+  if (!signaturesMatch(record.processSignature, signalState.signature)) return true;
+
+  try {
+    kill(record.pid, 'SIGKILL');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ESRCH') return true;
+    throw error;
+  }
+
+  return waitUntilProcessChanges(
+    record,
+    Date.now() + (options.forceTimeoutMs ?? forceShutdownTimeoutMs),
+    readState,
+  );
 }
 
 export async function stopArtifactSession(sessionId: string, options: SessionCommandOptions) {
@@ -361,7 +598,15 @@ export async function stopArtifactSession(sessionId: string, options: SessionCom
       `Unknown Artifact Session: ${sessionId}`,
     );
   }
-  if (!(await verifyOwnedProcess(record))) {
+  const processState = await readProcessSignatureState(record.pid);
+  if (processState.status !== 'found') {
+    if (processState.status === 'missing') await removeSessionRecord(sessionId);
+    throw new SessionLifecycleError(
+      'ARTIFACT_SESSION_OWNERSHIP_MISMATCH',
+      `Process ${record.pid} no longer belongs to this Artifact Session: ${sessionId}`,
+    );
+  }
+  if (!signaturesMatch(record.processSignature, processState.signature)) {
     await removeSessionRecord(sessionId);
     throw new SessionLifecycleError(
       'ARTIFACT_SESSION_OWNERSHIP_MISMATCH',
@@ -369,8 +614,8 @@ export async function stopArtifactSession(sessionId: string, options: SessionCom
     );
   }
 
-  const signalSignature = await readProcessSignature(record.pid);
-  if (!signalSignature || !signaturesMatch(record.processSignature, signalSignature)) {
+  const ready = await loadRuntimeReadyState(sessionId);
+  if (!ready || !readyMatchesRecord(record, ready)) {
     await removeSessionRecord(sessionId);
     throw new SessionLifecycleError(
       'ARTIFACT_SESSION_OWNERSHIP_MISMATCH',
@@ -378,22 +623,20 @@ export async function stopArtifactSession(sessionId: string, options: SessionCom
     );
   }
 
-  try {
-    process.kill(record.pid, 'SIGTERM');
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error;
+  const health = await readHealth(record);
+  if (health.status === 'mismatch') {
+    throw new SessionLifecycleError(
+      'ARTIFACT_SESSION_OWNERSHIP_MISMATCH',
+      `Process ${record.pid} no longer belongs to this Artifact Session: ${sessionId}`,
+    );
   }
 
-  if (!(await waitUntilProcessChanges(record, 3_000))) {
-    const signature = await readProcessSignature(record.pid);
-    if (signature && signaturesMatch(record.processSignature, signature)) {
-      try {
-        process.kill(record.pid, 'SIGKILL');
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error;
-      }
-      await waitUntilProcessChanges(record, 1_000);
-    }
+  const stopped = await stopOwnedRuntimeProcess(record, ready, await readInstanceToken(sessionId));
+  if (!stopped) {
+    throw new SessionLifecycleError(
+      'ARTIFACT_SESSION_STOP_FAILED',
+      `Artifact Session ${sessionId} process ${record.pid} did not stop`,
+    );
   }
 
   await removeSessionDirectory(sessionId);

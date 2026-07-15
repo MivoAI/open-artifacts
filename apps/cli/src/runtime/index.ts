@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { readFile, rm, writeFile } from 'node:fs/promises';
 import type { AddressInfo } from 'node:net';
 
@@ -11,7 +11,22 @@ import { reactAliases, reactRuntimeDirectory } from './react.js';
 
 const virtualEntryId = 'virtual:open-artifacts-session-entry';
 const resolvedVirtualEntryId = `\0${virtualEntryId}`;
-function artifactSessionPlugin(config: SessionRuntimeConfig): Plugin {
+function tokenMatches(expected: string, authorization: string | undefined) {
+  if (!authorization?.startsWith('Bearer ')) return false;
+  const provided = authorization.slice('Bearer '.length);
+  const expectedBuffer = Buffer.from(expected);
+  const providedBuffer = Buffer.from(provided);
+  return (
+    expectedBuffer.length === providedBuffer.length &&
+    timingSafeEqual(expectedBuffer, providedBuffer)
+  );
+}
+
+function artifactSessionPlugin(
+  config: SessionRuntimeConfig,
+  instanceToken: string,
+  requestShutdown: () => void,
+): Plugin {
   const entryUrl = `/@fs/${normalizePath(config.artifact.entryPath)}`;
 
   return {
@@ -28,6 +43,22 @@ function artifactSessionPlugin(config: SessionRuntimeConfig): Plugin {
             status: 'active',
           }),
         );
+      });
+      server.middlewares.use('/__oa/shutdown', (request, response) => {
+        if (request.method !== 'POST') {
+          response.statusCode = 405;
+          response.setHeader('allow', 'POST');
+          response.end();
+          return;
+        }
+        if (!tokenMatches(instanceToken, request.headers.authorization)) {
+          response.statusCode = 401;
+          response.end();
+          return;
+        }
+        response.statusCode = 202;
+        response.end();
+        setImmediate(requestShutdown);
       });
       server.middlewares.use('/__oa/preflight', async (_request, response) => {
         try {
@@ -68,7 +99,7 @@ createRoot(root).render(createElement(Render, { data }));
   };
 }
 
-async function startRuntime(config: SessionRuntimeConfig) {
+async function startRuntime(config: SessionRuntimeConfig, instanceToken: string) {
   await writeFile(
     `${config.sessionDirectory}/index.html`,
     `<!doctype html>
@@ -91,11 +122,20 @@ async function startRuntime(config: SessionRuntimeConfig) {
 `,
   );
 
+  let shuttingDown = false;
+  const shutdown = async () => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    await server.close();
+    await rm(config.readyFile, { force: true });
+    process.exit(0);
+  };
+
   const server = await createServer({
     appType: 'spa',
     clearScreen: false,
     logLevel: 'silent',
-    plugins: [artifactSessionPlugin(config)],
+    plugins: [artifactSessionPlugin(config, instanceToken, () => void shutdown())],
     resolve: {
       alias: reactAliases(),
       dedupe: ['react', 'react-dom'],
@@ -110,12 +150,6 @@ async function startRuntime(config: SessionRuntimeConfig) {
       strictPort: false,
     },
   });
-
-  const shutdown = async () => {
-    await server.close();
-    await rm(config.readyFile, { force: true });
-    process.exit(0);
-  };
 
   process.once('SIGINT', () => void shutdown());
   process.once('SIGTERM', () => void shutdown());
@@ -132,11 +166,10 @@ async function startRuntime(config: SessionRuntimeConfig) {
 
 const configPath = process.argv[2];
 if (!configPath) throw new Error('Artifact Session Runtime requires a config path');
-const instanceToken = process.argv[3];
-if (!instanceToken) throw new Error('Artifact Session Runtime requires an instance token');
 
 const config = JSON.parse(await readFile(configPath, 'utf8')) as SessionRuntimeConfig;
+const instanceToken = (await readFile(config.instanceSecretFile, 'utf8')).trim();
 if (createHash('sha256').update(instanceToken).digest('hex') !== config.instanceId) {
   throw new Error('Artifact Session Runtime instance token mismatch');
 }
-await startRuntime(config);
+await startRuntime(config, instanceToken);

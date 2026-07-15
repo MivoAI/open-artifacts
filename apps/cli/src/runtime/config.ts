@@ -9,6 +9,7 @@ export interface SessionRuntimeConfig {
   artifact: ArtifactIdentity;
   artifactInput: unknown;
   instanceId: string;
+  instanceSecretFile: string;
   readyFile: string;
   sessionDirectory: string;
   sessionId: string;

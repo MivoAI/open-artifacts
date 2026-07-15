@@ -1,12 +1,15 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
+import { EventEmitter } from 'node:events';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import type { ChildProcess } from 'node:child_process';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { resolveLocalArtifactPackage } from '../src/cli/artifact-package.js';
-import { waitForRuntime } from '../src/cli/run.js';
+import { ArtifactSessionCleanupError } from '../src/cli/errors.js';
+import { terminateFailedRuntime, waitForRuntime } from '../src/cli/run.js';
 
 const temporaryDirectories: string[] = [];
 
@@ -241,5 +244,28 @@ describe('Runtime readiness', () => {
         server.close((error) => (error ? rejectClose(error) : resolveClose())),
       );
     }
+  });
+
+  it('retains a stable cleanup failure when SIGKILL cannot confirm child exit', async () => {
+    const fixtureRoot = await mkdtemp(join(tmpdir(), 'open-artifacts-cleanup-failure-'));
+    temporaryDirectories.push(fixtureRoot);
+    const child = Object.assign(new EventEmitter(), {
+      exitCode: null,
+      kill: vi.fn(() => true),
+      pid: 4321,
+      signalCode: null,
+    }) as unknown as ChildProcess;
+
+    await expect(
+      terminateFailedRuntime(child, join(fixtureRoot, 'missing-ready.json'), 'secret-token', 5, 5),
+    ).resolves.toBe(false);
+    expect(child.kill).toHaveBeenLastCalledWith('SIGKILL');
+    expect(new ArtifactSessionCleanupError('session-id', 4321)).toMatchObject({
+      code: 'ARTIFACT_SESSION_CLEANUP_FAILED',
+      message: 'Failed Artifact Session session-id process 4321 did not stop',
+    });
+    expect(new ArtifactSessionCleanupError('session-id', 4321).message).not.toContain(
+      'secret-token',
+    );
   });
 });

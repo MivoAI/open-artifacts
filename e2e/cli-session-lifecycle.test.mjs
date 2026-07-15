@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -47,6 +47,13 @@ function stopSession(home, sessionId, environment) {
 async function sessionRecord(home, sessionId) {
   return JSON.parse(
     await readFile(join(home, '.open-artifacts', 'sessions', sessionId, 'record.json'), 'utf8'),
+  );
+}
+
+async function writeSessionRecord(home, sessionId, record) {
+  await writeFile(
+    join(home, '.open-artifacts', 'sessions', sessionId, 'record.json'),
+    `${JSON.stringify(record)}\n`,
   );
 }
 
@@ -100,6 +107,12 @@ test('run, list, and stop manage concurrent Active Sessions independently', asyn
   const records = await Promise.all(
     sessions.map((session) => sessionRecord(home, session.sessionId)),
   );
+
+  const unauthorizedShutdown = await globalThis.fetch(`${sessions[0].url}__oa/shutdown`, {
+    method: 'POST',
+  });
+  assert.equal(unauthorizedShutdown.status, 401);
+  assert.equal((await globalThis.fetch(sessions[0].url)).status, 200);
 
   assert.equal(new Set(sessions.map(({ sessionId }) => sessionId)).size, 2);
   assert.equal(new Set(sessions.map(({ url }) => url)).size, 2);
@@ -181,13 +194,13 @@ test('process ownership remains stable when Session commands use different timez
   });
 });
 
-test('list prunes nonexistent, misowned, unreachable, and malformed Session Records', async (t) => {
+test('list prunes dead, misowned, and ready-mismatched Session Records', async (t) => {
   buildCli();
   const home = await mkdtemp(join(tmpdir(), 'open-artifacts-stale-'));
   const active = startSession(home);
   const activeRecord = await sessionRecord(home, active.sessionId);
   const sessionsRoot = join(home, '.open-artifacts', 'sessions');
-  const staleIds = ['nonexistent', 'misowned', 'unreachable', 'malformed'];
+  const staleIds = ['nonexistent', 'misowned', 'ready-mismatch'];
 
   t.after(async () => {
     stopSession(home, active.sessionId);
@@ -208,14 +221,13 @@ test('list prunes nonexistent, misowned, unreachable, and malformed Session Reco
     })}\n`,
   );
   await writeFile(
-    join(sessionsRoot, 'unreachable', 'record.json'),
+    join(sessionsRoot, 'ready-mismatch', 'record.json'),
     `${JSON.stringify({
       ...activeRecord,
-      sessionId: 'unreachable',
+      sessionId: 'ready-mismatch',
       url: 'http://127.0.0.1:1/',
     })}\n`,
   );
-  await writeFile(join(sessionsRoot, 'malformed', 'record.json'), '{oops\n');
 
   assert.deepEqual(
     listSessions(home).sessions.map(({ sessionId }) => sessionId),
@@ -225,6 +237,34 @@ test('list prunes nonexistent, misowned, unreachable, and malformed Session Reco
     staleIds.map((staleId) => expectRemoved(join(sessionsRoot, staleId, 'record.json'))),
   );
 });
+
+test(
+  'list hides a temporarily unreachable owned Runtime without removing its stoppable record',
+  { skip: process.platform === 'win32' },
+  async (t) => {
+    buildCli();
+    const home = await mkdtemp(join(tmpdir(), 'open-artifacts-unreachable-'));
+    const session = startSession(home);
+    const record = await sessionRecord(home, session.sessionId);
+    const recordPath = join(home, '.open-artifacts', 'sessions', session.sessionId, 'record.json');
+
+    t.after(async () => {
+      try {
+        process.kill(record.pid, 'SIGKILL');
+      } catch {
+        // The stop command already terminated the Runtime.
+      }
+      await rm(home, { force: true, recursive: true });
+    });
+
+    process.kill(record.pid, 'SIGSTOP');
+    assert.deepEqual(listSessions(home), { sessions: [] });
+    await access(recordPath);
+
+    const stopped = stopSession(home, session.sessionId);
+    assert.equal(stopped.status, 0, stopped.stderr || stopped.stdout);
+  },
+);
 
 test('stop refuses unknown or misowned records without signaling the recorded process', async (t) => {
   buildCli();
@@ -270,8 +310,67 @@ test('stop refuses unknown or misowned records without signaling the recorded pr
   assert.equal((await globalThis.fetch(active.url)).status, 200);
 });
 
+test('stop binds each tampered record to its own Runtime-written ready identity', async (t) => {
+  buildCli();
+  const home = await mkdtemp(join(tmpdir(), 'open-artifacts-stop-ready-binding-'));
+  const first = startSession(home);
+  const second = startSession(home);
+  const firstRecord = await sessionRecord(home, first.sessionId);
+  const secondRecord = await sessionRecord(home, second.sessionId);
+  const instanceToken = (
+    await readFile(
+      join(home, '.open-artifacts', 'sessions', first.sessionId, 'instance.secret'),
+      'utf8',
+    )
+  ).trim();
+  assert.equal(JSON.stringify(firstRecord).includes(instanceToken), false);
+  if (process.platform !== 'win32') {
+    const secret = await stat(
+      join(home, '.open-artifacts', 'sessions', first.sessionId, 'instance.secret'),
+    );
+    assert.equal(secret.mode & 0o777, 0o600);
+  }
+
+  t.after(async () => {
+    await Promise.all([
+      writeSessionRecord(home, first.sessionId, firstRecord),
+      writeSessionRecord(home, second.sessionId, secondRecord),
+    ]);
+    stopSession(home, first.sessionId);
+    stopSession(home, second.sessionId);
+    await rm(home, { force: true, recursive: true });
+  });
+
+  await writeSessionRecord(home, first.sessionId, {
+    ...firstRecord,
+    pid: secondRecord.pid,
+    processSignature: secondRecord.processSignature,
+  });
+  const redirectedProcess = stopSession(home, first.sessionId);
+  assert.notEqual(redirectedProcess.status, 0);
+  assert.equal(
+    JSON.parse(redirectedProcess.stderr).error.code,
+    'ARTIFACT_SESSION_OWNERSHIP_MISMATCH',
+  );
+
+  await writeSessionRecord(home, second.sessionId, {
+    ...secondRecord,
+    instanceId: firstRecord.instanceId,
+    url: firstRecord.url,
+  });
+  const redirectedEndpoint = stopSession(home, second.sessionId);
+  assert.notEqual(redirectedEndpoint.status, 0);
+  assert.equal(
+    JSON.parse(redirectedEndpoint.stderr).error.code,
+    'ARTIFACT_SESSION_OWNERSHIP_MISMATCH',
+  );
+
+  assert.equal((await globalThis.fetch(first.url)).status, 200);
+  assert.equal((await globalThis.fetch(second.url)).status, 200);
+});
+
 test(
-  'stop force-kills an owned Runtime that cannot handle SIGTERM within three seconds',
+  'stop force-kills an owned Runtime when authenticated shutdown cannot complete in three seconds',
   { skip: process.platform === 'win32' },
   async (t) => {
     buildCli();

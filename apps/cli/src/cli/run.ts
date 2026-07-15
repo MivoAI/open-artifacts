@@ -13,8 +13,14 @@ import {
   type ArtifactInputOptions,
 } from './artifact-input.js';
 import { resolveLocalArtifactPackage } from './artifact-package.js';
-import { ArtifactSessionStartError } from './errors.js';
-import { readProcessSignature, type SessionRecord } from './session.js';
+import { ArtifactSessionCleanupError, ArtifactSessionStartError } from './errors.js';
+import {
+  publishJsonAtomically,
+  readProcessSignature,
+  readRuntimeReadyState,
+  requestRuntimeShutdown,
+  type SessionRecord,
+} from './session.js';
 
 interface RunOptions extends ArtifactInputOptions {
   json: boolean;
@@ -82,12 +88,25 @@ function waitForChildExit(child: ChildProcess, timeout: number) {
   });
 }
 
-async function terminateFailedRuntime(child: ChildProcess) {
-  if (await waitForChildExit(child, 0)) return;
-  child.kill('SIGTERM');
-  if (await waitForChildExit(child, 3_000)) return;
+export async function terminateFailedRuntime(
+  child: ChildProcess,
+  readyFile: string,
+  instanceToken: string,
+  gracefulTimeoutMs = 3_000,
+  forceTimeoutMs = 1_000,
+) {
+  if (await waitForChildExit(child, 0)) return true;
+
+  const ready = await readRuntimeReadyState(readyFile);
+  if (ready && ready.pid === child.pid) {
+    await requestRuntimeShutdown(ready, instanceToken);
+  } else if (process.platform !== 'win32') {
+    child.kill('SIGTERM');
+  }
+  if (await waitForChildExit(child, gracefulTimeoutMs)) return true;
+
   child.kill('SIGKILL');
-  await waitForChildExit(child, 1_000);
+  return waitForChildExit(child, forceTimeoutMs);
 }
 
 function openBrowser(url: string) {
@@ -107,11 +126,13 @@ export async function runArtifactPackage(reference: string, options: RunOptions)
   const instanceToken = randomBytes(32).toString('hex');
   const instanceId = createHash('sha256').update(instanceToken).digest('hex');
   const sessionDirectory = resolve(homedir(), '.open-artifacts', 'sessions', sessionId);
+  const instanceSecretFile = resolve(sessionDirectory, 'instance.secret');
   const readyFile = resolve(sessionDirectory, 'ready.json');
   const runtimeConfig: SessionRuntimeConfig = {
     artifact: artifactPackage.identity,
     artifactInput,
     instanceId,
+    instanceSecretFile,
     readyFile,
     sessionDirectory,
     sessionId,
@@ -121,18 +142,20 @@ export async function runArtifactPackage(reference: string, options: RunOptions)
   const logPath = resolve(sessionDirectory, 'runtime.log');
   const runtimeEntry = fileURLToPath(new URL('../runtime/index.js', import.meta.url));
   let child: ChildProcess | undefined;
+  let childPid: number | undefined;
 
   try {
     await mkdir(sessionDirectory, { recursive: true });
+    await writeFile(instanceSecretFile, `${instanceToken}\n`, { mode: 0o600 });
     await writeFile(configPath, `${JSON.stringify(runtimeConfig, null, 2)}\n`);
     const log = await open(logPath, 'a');
-    child = spawn(process.execPath, [runtimeEntry, configPath, instanceToken], {
+    child = spawn(process.execPath, [runtimeEntry, configPath], {
       cwd: artifactPackage.identity.root,
       detached: true,
       stdio: ['ignore', log.fd, log.fd],
     });
     await log.close();
-    const childPid = child.pid;
+    childPid = child.pid;
     if (!childPid) throw new Error('Artifact Session Runtime process did not start');
 
     const ready = await Promise.race([
@@ -152,10 +175,7 @@ export async function runArtifactPackage(reference: string, options: RunOptions)
       startedAt: new Date().toISOString(),
       url: ready.url,
     };
-    await writeFile(
-      resolve(sessionDirectory, 'record.json'),
-      `${JSON.stringify(record, null, 2)}\n`,
-    );
+    await publishJsonAtomically(resolve(sessionDirectory, 'record.json'), record);
     child.unref();
 
     const result = {
@@ -175,7 +195,12 @@ export async function runArtifactPackage(reference: string, options: RunOptions)
         : `Artifact Session ${sessionId}\n${artifactPackage.identity.name}\n${ready.url}\n`,
     );
   } catch {
-    if (child) await terminateFailedRuntime(child);
+    if (child) {
+      const stopped = await terminateFailedRuntime(child, readyFile, instanceToken).catch(
+        () => false,
+      );
+      if (!stopped && childPid) throw new ArtifactSessionCleanupError(sessionId, childPid);
+    }
     await rm(sessionDirectory, { force: true, recursive: true });
     throw new ArtifactSessionStartError();
   }

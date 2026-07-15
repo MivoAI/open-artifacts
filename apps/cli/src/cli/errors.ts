@@ -77,6 +77,16 @@ export class ArtifactSessionStartError extends CliError {
   }
 }
 
+export class ArtifactSessionCleanupError extends CliError {
+  constructor(sessionId: string, pid: number) {
+    super(
+      'ARTIFACT_SESSION_CLEANUP_FAILED',
+      'session',
+      `Failed Artifact Session ${sessionId} process ${pid} did not stop`,
+    );
+  }
+}
+
 function normalizeError(error: unknown) {
   if (error instanceof CliError) return error;
   return new CliError(
