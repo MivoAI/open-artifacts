@@ -16,7 +16,7 @@ program
 const runCommand = program
   .command('run')
   .description('Start a new Artifact Session')
-  .argument('<artifact>', 'explicit relative or absolute local Artifact Package path')
+  .argument('<artifact>', 'local or npm Artifact Reference')
   .option('--input <file>', 'read Artifact Input from a JSON file')
   .option('--data <json>', 'read Artifact Input from inline JSON')
   .option('--json', 'emit stable machine-readable output', false)

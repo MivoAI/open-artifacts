@@ -1,4 +1,5 @@
 export interface ArtifactIdentity {
+  dependencyRoot?: string;
   entryPath: string;
   name: string;
   root: string;

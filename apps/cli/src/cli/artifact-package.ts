@@ -215,6 +215,7 @@ async function smokeRenderArtifactSource(
   artifactRoot: string,
   entryPath: string,
   exampleInput: unknown,
+  dependencyRoot = artifactRoot,
 ) {
   const runtimeRoot = reactResolutionRoot();
   const cacheDirectory = await mkdtemp(resolve(tmpdir(), 'open-artifacts-smoke-render-'));
@@ -230,7 +231,7 @@ async function smokeRenderArtifactSource(
       root: runtimeRoot,
       server: {
         middlewareMode: true,
-        fs: { allow: [artifactRoot, runtimeRoot] },
+        fs: { allow: [artifactRoot, dependencyRoot, runtimeRoot] },
       },
     });
     const artifactModule = (await server.ssrLoadModule(`/@fs/${normalizePath(entryPath)}`)) as {
@@ -275,6 +276,7 @@ async function smokeRenderArtifactSource(
 export async function resolveLocalArtifactPackage(
   reference: string,
   cwd: string,
+  options: { dependencyRoot?: string } = {},
 ): Promise<ResolvedArtifactPackage> {
   const isExplicitRelative =
     reference === '.' ||
@@ -352,11 +354,17 @@ export async function resolveLocalArtifactPackage(
   };
   const exampleIssues = validateResolvedInput(exampleInput, '$.example');
   if (exampleIssues.length > 0) throw new ArtifactPackageContractError(exampleIssues);
-  await smokeRenderArtifactSource(root, resources['src/index.tsx'], exampleInput);
+  await smokeRenderArtifactSource(
+    root,
+    resources['src/index.tsx'],
+    exampleInput,
+    options.dependencyRoot,
+  );
 
   return {
     exampleInput,
     identity: {
+      ...(options.dependencyRoot ? { dependencyRoot: options.dependencyRoot } : {}),
       entryPath: resources['src/index.tsx'],
       name: manifest.name,
       root,
