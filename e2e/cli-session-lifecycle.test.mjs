@@ -92,16 +92,21 @@ test('the built oa executable exposes the session command tree', () => {
   const session = runCli(['session', '--help'], process.env.HOME);
   const list = runCli(['session', 'list', '--help'], process.env.HOME);
   const stop = runCli(['session', 'stop', '--help'], process.env.HOME);
+  const topLevelHelpCommand = runCli(['help'], process.env.HOME);
+  const sessionHelpCommand = runCli(['session', 'help'], process.env.HOME);
 
   assert.equal(topLevel.status, 0, topLevel.stderr);
   assert.match(topLevel.stdout, /session/);
   assert.equal(session.status, 0, session.stderr);
   assert.match(session.stdout, /list \[options\]/);
   assert.match(session.stdout, /stop \[options\] <id>/);
+  assert.doesNotMatch(session.stdout, /^\s+help\b/m);
   assert.equal(list.status, 0, list.stderr);
   assert.match(list.stdout, /--json/);
   assert.equal(stop.status, 0, stop.stderr);
   assert.match(stop.stdout, /--json/);
+  assert.equal(topLevelHelpCommand.status, 1);
+  assert.equal(sessionHelpCommand.status, 1);
 });
 
 test('run, list, and stop manage concurrent Active Sessions independently', async (t) => {

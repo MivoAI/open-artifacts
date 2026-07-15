@@ -3,7 +3,7 @@ export interface CliIssue {
   path: string;
 }
 
-type CliErrorKind = 'contract' | 'input' | 'reference' | 'session';
+type CliErrorKind = 'contract' | 'input' | 'reference' | 'session' | 'usage';
 
 export class CliError extends Error {
   constructor(
@@ -35,6 +35,12 @@ export class ArtifactPackageContractError extends CliError {
 export class ArtifactReferenceError extends CliError {
   constructor(message: string) {
     super('ARTIFACT_REFERENCE_INVALID', 'reference', message);
+  }
+}
+
+export class CliUsageError extends CliError {
+  constructor(message: string) {
+    super('OA_CLI_USAGE_ERROR', 'usage', message);
   }
 }
 
@@ -120,7 +126,9 @@ export function writeCliError(error: unknown, json: boolean) {
         ? 'Artifact Input error'
         : cliError.kind === 'reference'
           ? 'Artifact Reference error'
-          : 'Artifact Session error';
+          : cliError.kind === 'usage'
+            ? 'CLI usage error'
+            : 'Artifact Session error';
   const issues =
     cliError.issues?.map((issue) => `\n  - ${issue.path}: ${issue.message}`).join('') ?? '';
   process.stderr.write(`oa: ${heading}: ${cliError.message}${issues}\n`);

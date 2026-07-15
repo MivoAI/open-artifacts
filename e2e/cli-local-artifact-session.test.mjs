@@ -41,9 +41,61 @@ test('the built oa executable exposes the approved first command surface', () =>
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /Usage: oa/);
   assert.match(result.stdout, /run \[options\] <artifact>/);
+  assert.doesNotMatch(result.stdout, /^\s+help\b/m);
   assert.equal(runHelp.status, 0, runHelp.stderr);
   assert.match(runHelp.stdout, /--json/);
   assert.match(runHelp.stdout, /--no-open/);
+});
+
+test('oa emits machine-readable Commander failures when --json is requested', () => {
+  buildCli();
+  const cases = [
+    [['run', '--json', '--no-open'], /missing required argument 'artifact'/],
+    [['run', '/tmp', '--bogus', '--json'], /unknown option '--bogus'/],
+    [['session', 'stop', '--json'], /missing required argument 'id'/],
+  ];
+
+  for (const [arguments_, expectedMessage] of cases) {
+    const result = runCli(arguments_);
+
+    assert.equal(result.status, 1, result.stderr || result.stdout);
+    assert.equal(result.stdout, '');
+    const payload = JSON.parse(result.stderr);
+    assert.deepEqual(
+      { code: payload.error.code, kind: payload.error.kind },
+      { code: 'OA_CLI_USAGE_ERROR', kind: 'usage' },
+    );
+    assert.match(payload.error.message, expectedMessage);
+  }
+});
+
+test('oa does not treat --json after the option terminator as an output flag', () => {
+  buildCli();
+  const result = runCli(['session', 'nonsense', '--', '--json']);
+
+  assert.equal(result.status, 1);
+  assert.equal(result.stdout, '');
+  assert.match(result.stderr, /^error:/);
+  assert.throws(() => JSON.parse(result.stderr));
+});
+
+test('oa emits machine-readable command help when --json is requested', () => {
+  buildCli();
+  const cases = [
+    [['run', '--json', '--help'], /Usage: oa run \[options\] <artifact>/],
+    [['session', 'list', '--json', '--help'], /Usage: oa session list \[options\]/],
+    [['session', 'stop', '--json', '--help'], /Usage: oa session stop \[options\] <id>/],
+  ];
+
+  for (const [arguments_, expectedHelp] of cases) {
+    const result = runCli(arguments_);
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.equal(result.stderr, '');
+    const payload = JSON.parse(result.stdout);
+    assert.deepEqual(Object.keys(payload), ['help']);
+    assert.match(payload.help, expectedHelp);
+  }
 });
 
 test('oa run starts local Artifact Packages from relative and absolute references', async (t) => {

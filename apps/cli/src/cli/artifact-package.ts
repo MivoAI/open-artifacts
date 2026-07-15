@@ -88,8 +88,6 @@ export function isLocalArtifactReference(
 ) {
   return (
     (platform === 'win32' ? win32.isAbsolute(reference) : isAbsolute(reference)) ||
-    reference === '.' ||
-    reference === '..' ||
     reference.startsWith('./') ||
     reference.startsWith('../') ||
     (platform === 'win32' && (reference.startsWith('.\\') || reference.startsWith('..\\')))
