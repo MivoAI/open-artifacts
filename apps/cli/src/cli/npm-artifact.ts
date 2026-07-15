@@ -213,6 +213,10 @@ function dependencyPath(name: string) {
   return join('node_modules', ...name.split('/'));
 }
 
+export function packageLockDependencyKey(name: string) {
+  return `node_modules/${name}`;
+}
+
 async function writeResolutionProject(root: string, reference: NpmArtifactReference) {
   await writeFile(
     join(root, 'package.json'),
@@ -245,7 +249,7 @@ async function resolveProvenance(
   );
 
   const lock = JSON.parse(await readFile(join(root, 'package-lock.json'), 'utf8')) as PackageLock;
-  const locked = lock.packages?.[dependencyPath(reference.name)];
+  const locked = lock.packages?.[packageLockDependencyKey(reference.name)];
   if (!locked?.version || !locked.resolved || !locked.integrity) {
     throw new ArtifactReferenceError('npm did not resolve the Artifact Package immutably');
   }

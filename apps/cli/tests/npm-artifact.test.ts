@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   artifactCacheKey,
   npmSubprocessCommand,
+  packageLockDependencyKey,
   parseNpmArtifactReference,
   sanitizeRegistryUrl,
   type NpmArtifactProvenance,
@@ -47,6 +48,18 @@ describe('npm registry provenance', () => {
     expect(
       sanitizeRegistryUrl('https://user:secret@registry.example.test/npm/?token=secret#fragment'),
     ).toBe('https://registry.example.test/npm/');
+  });
+});
+
+describe('npm lockfile package keys', () => {
+  it.each([
+    ['artifact', 'node_modules/artifact'],
+    ['@scope/artifact', 'node_modules/@scope/artifact'],
+  ])('uses platform-independent slashes for %s', (name, expected) => {
+    const key = packageLockDependencyKey(name);
+
+    expect(key).toBe(expected);
+    expect(key).not.toContain('\\');
   });
 });
 
