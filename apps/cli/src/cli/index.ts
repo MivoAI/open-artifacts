@@ -4,7 +4,7 @@ import { Command } from 'commander';
 
 import { writeCliError } from './errors.js';
 import { runArtifactPackage } from './run.js';
-import { listArtifactSessions, SessionLifecycleError, stopArtifactSession } from './session.js';
+import { listArtifactSessions, stopArtifactSession } from './session.js';
 
 const program = new Command();
 
@@ -47,7 +47,12 @@ session
   .description('List reachable Active Sessions')
   .option('--json', 'emit stable machine-readable output', false)
   .action(async (options: { json: boolean }) => {
-    await listArtifactSessions(options);
+    try {
+      await listArtifactSessions(options);
+    } catch (error) {
+      writeCliError(error, options.json);
+      process.exitCode = 1;
+    }
   });
 
 session
@@ -56,16 +61,12 @@ session
   .argument('<id>', 'required Session ID')
   .option('--json', 'emit stable machine-readable output', false)
   .action(async (id: string, options: { json: boolean }) => {
-    await stopArtifactSession(id, options);
+    try {
+      await stopArtifactSession(id, options);
+    } catch (error) {
+      writeCliError(error, options.json);
+      process.exitCode = 1;
+    }
   });
 
-try {
-  await program.parseAsync();
-} catch (error) {
-  if (error instanceof SessionLifecycleError) {
-    process.stderr.write(`oa: ${error.message}\n`);
-    process.exitCode = 1;
-  } else {
-    throw error;
-  }
-}
+await program.parseAsync();

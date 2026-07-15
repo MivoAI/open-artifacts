@@ -243,7 +243,13 @@ test('stop refuses unknown or misowned records without signaling the recorded pr
 
   const unknown = stopSession(home, 'unknown-session');
   assert.notEqual(unknown.status, 0);
-  assert.match(unknown.stderr, /Unknown Artifact Session: unknown-session/);
+  assert.deepEqual(JSON.parse(unknown.stderr), {
+    error: {
+      code: 'ARTIFACT_SESSION_NOT_FOUND',
+      kind: 'session',
+      message: 'Unknown Artifact Session: unknown-session',
+    },
+  });
 
   await writeFile(
     join(home, '.open-artifacts', 'sessions', active.sessionId, 'record.json'),
@@ -254,7 +260,13 @@ test('stop refuses unknown or misowned records without signaling the recorded pr
   );
   const misowned = stopSession(home, active.sessionId);
   assert.notEqual(misowned.status, 0);
-  assert.match(misowned.stderr, /no longer belongs to this Artifact Session/);
+  assert.deepEqual(JSON.parse(misowned.stderr), {
+    error: {
+      code: 'ARTIFACT_SESSION_OWNERSHIP_MISMATCH',
+      kind: 'session',
+      message: `Process ${record.pid} no longer belongs to this Artifact Session: ${active.sessionId}`,
+    },
+  });
   assert.equal((await globalThis.fetch(active.url)).status, 200);
 });
 

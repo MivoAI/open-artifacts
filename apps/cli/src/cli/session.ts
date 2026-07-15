@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 import { promisify } from 'node:util';
 
 import type { ArtifactIdentity } from '../runtime/config.js';
+import { CliError } from './errors.js';
 
 const execFileAsync = promisify(execFile);
 const sessionIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -37,7 +38,14 @@ interface SessionCommandOptions {
   json: boolean;
 }
 
-export class SessionLifecycleError extends Error {}
+type SessionLifecycleErrorCode =
+  'ARTIFACT_SESSION_NOT_FOUND' | 'ARTIFACT_SESSION_OWNERSHIP_MISMATCH';
+
+export class SessionLifecycleError extends CliError {
+  constructor(code: SessionLifecycleErrorCode, message: string) {
+    super(code, 'session', message);
+  }
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -302,14 +310,23 @@ async function waitUntilProcessChanges(record: SessionRecord, timeoutMs: number)
 
 export async function stopArtifactSession(sessionId: string, options: SessionCommandOptions) {
   if (!sessionIdPattern.test(sessionId)) {
-    throw new SessionLifecycleError(`Unknown Artifact Session: ${sessionId}`);
+    throw new SessionLifecycleError(
+      'ARTIFACT_SESSION_NOT_FOUND',
+      `Unknown Artifact Session: ${sessionId}`,
+    );
   }
 
   const record = await loadSessionRecord(sessionId);
-  if (!record) throw new SessionLifecycleError(`Unknown Artifact Session: ${sessionId}`);
+  if (!record) {
+    throw new SessionLifecycleError(
+      'ARTIFACT_SESSION_NOT_FOUND',
+      `Unknown Artifact Session: ${sessionId}`,
+    );
+  }
   if (!(await verifyOwnedProcess(record))) {
     await removeSessionRecord(sessionId);
     throw new SessionLifecycleError(
+      'ARTIFACT_SESSION_OWNERSHIP_MISMATCH',
       `Process ${record.pid} no longer belongs to this Artifact Session: ${sessionId}`,
     );
   }
@@ -318,6 +335,7 @@ export async function stopArtifactSession(sessionId: string, options: SessionCom
   if (!signalSignature || !signaturesMatch(record.processSignature, signalSignature)) {
     await removeSessionRecord(sessionId);
     throw new SessionLifecycleError(
+      'ARTIFACT_SESSION_OWNERSHIP_MISMATCH',
       `Process ${record.pid} no longer belongs to this Artifact Session: ${sessionId}`,
     );
   }
