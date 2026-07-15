@@ -193,7 +193,7 @@ test('run, list, and stop manage concurrent Active Sessions independently', asyn
 
 test('the Runtime denies Session control files when the Artifact root contains them', async (t) => {
   buildCli();
-  const root = await mkdtemp(join(tmpdir(), 'open-artifacts-control-boundary-'));
+  const root = await mkdtemp(join(tmpdir(), 'open-artifacts-control%20-boundary-'));
   const home = join(root, 'artifact-home');
   await cp(plainArtifactRoot, home, { recursive: true });
   let session;
@@ -214,21 +214,25 @@ test('the Runtime denies Session control files when the Artifact root contains t
     'instance.secret',
   );
   const secret = (await readFile(secretPath, 'utf8')).trim();
+  const browserSecretPath = secretPath.replaceAll('%', '%25');
 
-  const response = await globalThis.fetch(new globalThis.URL(`/@fs/${secretPath}`, session.url));
+  const response = await globalThis.fetch(
+    new globalThis.URL(`/@fs/${browserSecretPath}?raw&import`, session.url),
+  );
   assert.equal(response.status, 403);
   assert.doesNotMatch(await response.text(), new RegExp(secret));
 
   const encodedResponse = await globalThis.fetch(
-    new globalThis.URL(`/%40fs/${secretPath}?raw&import`, session.url),
+    new globalThis.URL(`/%40fs/${browserSecretPath}?raw&import`, session.url),
   );
   assert.equal(encodedResponse.status, 403);
   assert.doesNotMatch(await encodedResponse.text(), new RegExp(secret));
 
   const controlLink = join(home, 'linked-session-control');
   await symlink(join(home, '.open-artifacts', 'sessions', session.sessionId), controlLink);
+  const browserControlLink = join(controlLink, 'instance.secret').replaceAll('%', '%25');
   const linkedResponse = await globalThis.fetch(
-    new globalThis.URL(`/@fs/${join(controlLink, 'instance.secret')}`, session.url),
+    new globalThis.URL(`/@fs/${browserControlLink}`, session.url),
   );
   assert.equal(linkedResponse.status, 403);
   assert.doesNotMatch(await linkedResponse.text(), new RegExp(secret));
