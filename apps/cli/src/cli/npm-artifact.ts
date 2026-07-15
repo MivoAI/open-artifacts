@@ -13,6 +13,7 @@ import {
   rm,
   rmdir,
   stat,
+  utimes,
   writeFile,
 } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
@@ -32,6 +33,7 @@ const supportedRegistryTypes = new Set(['range', 'tag', 'version']);
 const defaultRegistry = 'https://registry.npmjs.org/';
 const cacheContentManifestName = 'open-artifacts-content.json';
 const cacheLockWaitMilliseconds = 120_000;
+const cacheLockHeartbeatMilliseconds = 1_000;
 const cacheLockMaximumAgeMilliseconds = 10 * 60_000;
 const ownerlessCacheLockGraceMilliseconds = 5_000;
 const windowsNpmScript = [
@@ -217,8 +219,127 @@ async function findProjectNpmConfig(invocationCwd: string) {
   return undefined;
 }
 
+function decodeNpmConfigValue(value: string) {
+  const trimmed = value.trim();
+  const quoted =
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"));
+  if (quoted) {
+    const candidate = trimmed.startsWith("'") ? trimmed.slice(1, -1) : trimmed;
+    try {
+      return JSON.parse(candidate) as unknown;
+    } catch {
+      return candidate;
+    }
+  }
+
+  let escaped = false;
+  let decoded = '';
+  for (const character of trimmed) {
+    if (escaped) {
+      decoded += character === ';' || character === '#' ? character : `\\${character}`;
+      escaped = false;
+    } else if (character === ';' || character === '#') {
+      break;
+    } else if (character === '\\') {
+      escaped = true;
+    } else {
+      decoded += character;
+    }
+  }
+  if (escaped) decoded += '\\';
+  const result = decoded.trim();
+  return result === 'true' || result === 'false' || result === 'null'
+    ? (JSON.parse(result) as unknown)
+    : result;
+}
+
+function replaceNpmConfigEnvironment(value: string, environment: NodeJS.ProcessEnv) {
+  return value.replace(
+    /(?<!\\)(\\*)\$\{([^${}?]+)(\?)?\}/g,
+    (original, escaping: string, name: string, optional: string | undefined) => {
+      if (escaping.length % 2) return original.slice((escaping.length + 1) / 2);
+      const replacement = environment[name] ?? (optional ? '' : `\${${name}}`);
+      return `${escaping.slice(escaping.length / 2)}${replacement}`;
+    },
+  );
+}
+
+function protectNpmConfigEnvironment(value: string) {
+  return value.replace(
+    /(\\*)\$\{([^${}?]+)(\?)?\}/g,
+    (original, escaping: string) =>
+      `${'\\'.repeat(escaping.length * 2 + 1)}${original.slice(escaping.length)}`,
+  );
+}
+
+function isNpmConfigFilePathKey(key: string) {
+  const normalized = key.toLowerCase();
+  return (
+    normalized === 'cafile' ||
+    normalized === 'certfile' ||
+    normalized === 'keyfile' ||
+    normalized.endsWith(':certfile') ||
+    normalized.endsWith(':keyfile')
+  );
+}
+
+export function absolutizeProjectNpmConfigPaths(
+  contents: string,
+  configDirectory: string,
+  environment: NodeJS.ProcessEnv = process.env,
+) {
+  const parsedAssignments = new Map<
+    string,
+    { rawKey: string; value: ReturnType<typeof decodeNpmConfigValue> }
+  >();
+  let section = false;
+  for (const line of contents.split(/[\r\n]+/)) {
+    if (!line || /^\s*[;#]/.test(line)) continue;
+    if (/^\s*\[[^\]]*\]\s*$/.test(line)) {
+      section = true;
+      continue;
+    }
+    if (section) continue;
+    const assignment = line.match(/^([^=]+)=(.*)$/);
+    if (!assignment) continue;
+    const [, rawKey, rawValue] = assignment;
+    if (rawKey === undefined || rawValue === undefined) continue;
+    const key = decodeNpmConfigValue(rawKey);
+    if (typeof key !== 'string') continue;
+    parsedAssignments.set(key, { rawKey: rawKey.trim(), value: decodeNpmConfigValue(rawValue) });
+  }
+
+  const overrides = new Map<string, string>();
+  for (const [key, { rawKey, value }] of parsedAssignments) {
+    const effectiveKey = replaceNpmConfigEnvironment(key, environment);
+    if (!isNpmConfigFilePathKey(effectiveKey)) continue;
+    if (typeof value !== 'string') {
+      overrides.delete(effectiveKey);
+      continue;
+    }
+
+    const expandedValue = replaceNpmConfigEnvironment(value, environment);
+    if (isAbsolute(expandedValue) || /^~[\\/]/.test(expandedValue)) {
+      overrides.delete(effectiveKey);
+      continue;
+    }
+    const absoluteValue = protectNpmConfigEnvironment(resolve(configDirectory, expandedValue));
+    overrides.set(effectiveKey, `${rawKey}=${JSON.stringify(absoluteValue)}`);
+  }
+
+  if (overrides.size === 0) return contents;
+  const separator = contents.endsWith('\n') || contents.endsWith('\r') ? '' : '\n';
+  return `${contents}${separator}${[...overrides.values()].join('\n')}\n`;
+}
+
 async function copyProjectNpmConfig(root: string, projectConfig: string | undefined) {
-  if (projectConfig) await cp(projectConfig, join(root, '.npmrc'));
+  if (!projectConfig) return;
+  const contents = await readFile(projectConfig, 'utf8');
+  await writeFile(
+    join(root, '.npmrc'),
+    absolutizeProjectNpmConfigPaths(contents, dirname(projectConfig)),
+  );
 }
 
 async function runNpm(cwd: string, arguments_: string[]) {
@@ -612,6 +733,7 @@ export async function withCacheEntryLock<T>(
     }
   }
 
+  let heartbeat: NodeJS.Timeout | undefined;
   try {
     await writeFile(
       join(ownerPath, 'owner.json'),
@@ -621,6 +743,11 @@ export async function withCacheEntryLock<T>(
         token: ownerToken,
       })}\n`,
     );
+    heartbeat = setInterval(() => {
+      const timestamp = new Date();
+      void utimes(ownerPath, timestamp, timestamp).catch(() => undefined);
+    }, cacheLockHeartbeatMilliseconds);
+    heartbeat.unref();
 
     while (true) {
       const claims = await activeClaims();
@@ -647,6 +774,7 @@ export async function withCacheEntryLock<T>(
 
     return await work();
   } finally {
+    if (heartbeat) clearInterval(heartbeat);
     await releaseOwnerClaim();
   }
 }

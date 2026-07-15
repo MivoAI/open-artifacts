@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -6,6 +6,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { describe, expect, it } from 'vitest';
 
 import {
+  absolutizeProjectNpmConfigPaths,
   artifactCacheKey,
   npmSubprocessCommand,
   packageLockGraphDigest,
@@ -75,6 +76,68 @@ describe('npm registry provenance', () => {
     expect(
       sanitizeRegistryUrl('https://user:secret@registry.example.test/npm/?token=secret#fragment'),
     ).toBe('https://registry.example.test/npm/');
+  });
+});
+
+describe('project npm config paths', () => {
+  it('keeps certificate paths relative to the original project config', () => {
+    const configDirectory = join(tmpdir(), 'open-artifacts-project');
+    const contents = [
+      'cafile=/etc/ssl/cert.pem',
+      'cafile=./certs/ca.pem',
+      '//registry.example.test/:certfile="../client.crt"',
+      "//registry.example.test/:keyfile='${CERTIFICATES}/client.key'",
+      'registry=https://registry.example.test/',
+      'keyfile=~/keys/client.key',
+      '',
+    ].join('\n');
+
+    const rewritten = absolutizeProjectNpmConfigPaths(contents, configDirectory, {
+      CERTIFICATES: 'credentials',
+    });
+
+    expect(rewritten).toContain(`cafile=${JSON.stringify(join(configDirectory, 'certs/ca.pem'))}`);
+    expect(rewritten).toContain(
+      `//registry.example.test/:certfile=${JSON.stringify(join(configDirectory, '../client.crt'))}`,
+    );
+    expect(rewritten).toContain(
+      `//registry.example.test/:keyfile=${JSON.stringify(
+        join(configDirectory, 'credentials/client.key'),
+      )}`,
+    );
+    expect(rewritten.match(/^registry=/gm)).toHaveLength(1);
+    expect(rewritten.match(/^cafile=/gm)).toHaveLength(3);
+    expect(rewritten.match(/^keyfile=/gm)).toHaveLength(1);
+  });
+
+  it('preserves npm ini escaping while resolving relative paths', () => {
+    const configDirectory = join(tmpdir(), 'open-artifacts-project');
+    const rewritten = absolutizeProjectNpmConfigPaths(
+      'cafile=./certs/ca\\#one.pem # comment\n',
+      configDirectory,
+    );
+
+    expect(rewritten).toContain(
+      `cafile=${JSON.stringify(join(configDirectory, 'certs/ca#one.pem'))}`,
+    );
+  });
+
+  it('does not let an earlier relative assignment override a later absolute value', () => {
+    const contents = 'cafile=./first.pem\ncafile=/final.pem\n';
+
+    expect(absolutizeProjectNpmConfigPaths(contents, '/project')).toBe(contents);
+  });
+
+  it('does not expand environment placeholders a second time in the copied config', () => {
+    const configDirectory = join(tmpdir(), 'open-artifacts-project');
+    const rewritten = absolutizeProjectNpmConfigPaths(
+      String.raw`cafile=./certs/\${NAME}.pem` + '\n',
+      configDirectory,
+      { NAME: 'expanded' },
+    );
+    const protectedPlaceholderPath = join(configDirectory, 'certs', String.raw`\${NAME}.pem`);
+
+    expect(rewritten).toContain(`cafile=${JSON.stringify(protectedPlaceholderPath)}`);
   });
 });
 
@@ -217,6 +280,81 @@ describe('npm Artifact cache identity', () => {
 });
 
 describe('npm Artifact cache locking', () => {
+  it('does not expire an owner while its process is alive', async () => {
+    const cacheRoot = await mkdtemp(join(tmpdir(), 'open-artifacts-lock-test-'));
+    const firstEntered = deferred();
+    const releaseFirst = deferred();
+    const secondEntered = deferred();
+    const releaseSecond = deferred();
+    const operations: Promise<unknown>[] = [];
+
+    try {
+      operations.push(
+        withCacheEntryLock(cacheRoot, 'fixture', async () => {
+          firstEntered.resolve();
+          await releaseFirst.promise;
+        }),
+      );
+      await firstEntered.promise;
+
+      const [owner] = await ownerDirectories(join(cacheRoot, '.fixture.lock'));
+      if (!owner) throw new Error('cache lock owner was not created');
+      const oldTimestamp = new Date(Date.now() - 60 * 60_000);
+      await utimes(owner, oldTimestamp, oldTimestamp);
+      let heartbeatObserved = false;
+      for (let attempt = 0; attempt < 40; attempt += 1) {
+        await delay(100);
+        if ((await stat(owner)).mtimeMs > oldTimestamp.getTime()) {
+          heartbeatObserved = true;
+          break;
+        }
+      }
+      expect(heartbeatObserved).toBe(true);
+
+      operations.push(
+        withCacheEntryLock(cacheRoot, 'fixture', async () => {
+          secondEntered.resolve();
+          await releaseSecond.promise;
+        }),
+      );
+      expect(await Promise.race([secondEntered.promise.then(() => true), delay(150, false)])).toBe(
+        false,
+      );
+
+      releaseFirst.resolve();
+      await secondEntered.promise;
+    } finally {
+      releaseFirst.resolve();
+      releaseSecond.resolve();
+      await Promise.allSettled(operations);
+      await rm(cacheRoot, { force: true, recursive: true });
+    }
+  });
+
+  it('reclaims an abandoned owner even when its pid has been reused', async () => {
+    const cacheRoot = await mkdtemp(join(tmpdir(), 'open-artifacts-lock-test-'));
+    const token = 'owner-abandoned';
+    const owner = join(cacheRoot, '.fixture.lock', token);
+
+    try {
+      await mkdir(owner, { recursive: true });
+      await writeFile(
+        join(owner, 'owner.json'),
+        `${JSON.stringify({ pid: process.pid, token })}\n`,
+      );
+      const oldTimestamp = new Date(Date.now() - 60 * 60_000);
+      await utimes(owner, oldTimestamp, oldTimestamp);
+
+      let entered = false;
+      await withCacheEntryLock(cacheRoot, 'fixture', async () => {
+        entered = true;
+      });
+      expect(entered).toBe(true);
+    } finally {
+      await rm(cacheRoot, { force: true, recursive: true });
+    }
+  });
+
   it('does not let a stale owner release a successor lock', async () => {
     const cacheRoot = await mkdtemp(join(tmpdir(), 'open-artifacts-lock-test-'));
     const firstEntered = deferred();
