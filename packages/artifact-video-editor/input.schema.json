@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://open-artifacts.dev/artifact-packages/video-editor/input.schema.json",
+  "title": "Video Editor input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["project", "agent", "media", "timeline"],
+  "properties": {
+    "project": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "sequence", "status"],
+      "properties": {
+        "name": { "type": "string" },
+        "sequence": { "type": "string" },
+        "status": { "type": "string" }
+      }
+    },
+    "agent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["eyebrow", "title", "summary", "tasks", "composerPlaceholder"],
+      "properties": {
+        "eyebrow": { "type": "string" },
+        "title": { "type": "string" },
+        "summary": { "type": "string" },
+        "tasks": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+        "composerPlaceholder": { "type": "string" }
+      }
+    },
+    "media": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "kind", "durationSeconds", "dimensions"],
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "kind": { "type": "string" },
+        "durationSeconds": { "type": "number", "exclusiveMinimum": 0 },
+        "dimensions": { "type": "string" }
+      }
+    },
+    "timeline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "trackLabel"],
+      "properties": {
+        "title": { "type": "string" },
+        "trackLabel": { "type": "string" }
+      }
+    }
+  }
+}

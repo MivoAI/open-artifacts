@@ -14,6 +14,9 @@
       "path": "./packages/artifact-evidence-trace"
     },
     {
+      "path": "./packages/artifact-video-editor"
+    },
+    {
       "path": "./packages/config"
     },
     {

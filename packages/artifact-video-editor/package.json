@@ -1,0 +1,36 @@
+{
+  "name": "@open-artifacts/video-editor",
+  "version": "0.1.0",
+  "description": "A source-first video editing Artifact with synchronized playback and timeline controls.",
+  "type": "module",
+  "files": [
+    "assets",
+    "src",
+    "input.schema.json",
+    "example.json",
+    "tsconfig.json",
+    "README.md"
+  ],
+  "exports": {
+    ".": "./src/index.tsx",
+    "./schema": "./input.schema.json",
+    "./example": "./example.json",
+    "./package.json": "./package.json"
+  },
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "openArtifacts": {
+    "format": "react-render/v0"
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.17",
+    "typescript": "^5.8.3"
+  }
+}

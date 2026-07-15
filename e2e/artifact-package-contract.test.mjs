@@ -13,6 +13,10 @@ const expectedPackages = [
     directory: 'artifact-evidence-trace',
     name: '@open-artifacts/evidence-trace',
   },
+  {
+    directory: 'artifact-video-editor',
+    name: '@open-artifacts/video-editor',
+  },
 ];
 
 async function readJson(path) {
