@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
+import { access, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -51,9 +51,7 @@ function finalizeMetrics(metrics) {
 function normalizeMetrics(metrics) {
   finalizeMetrics(metrics);
 
-  if (metrics.statements.total === 0 && metrics.lines.total === 0) {
-    return emptyMetrics();
-  }
+  if (metrics.statements.total === 0 && metrics.lines.total === 0) return emptyMetrics();
 
   if (metrics.statements.covered === 0 && metrics.lines.covered === 0) {
     for (const name of ['branches', 'functions']) {
@@ -78,9 +76,12 @@ async function modulePaths(root) {
     }
 
     for (const entry of entries) {
-      if (entry.isDirectory() && !entry.name.startsWith('.')) {
-        modules.push(`${parent}/${entry.name}`);
-      }
+      if (!entry.isDirectory() || entry.name.startsWith('.')) continue;
+      const module = `${parent}/${entry.name}`;
+      const hasManifest = await access(join(root, module, 'package.json'))
+        .then(() => true)
+        .catch(() => false);
+      if (hasManifest) modules.push(module);
     }
   }
 

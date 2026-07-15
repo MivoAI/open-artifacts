@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "module": "apps/cli",
+  "command": "npm run test",
+  "status": "measured",
+  "files": 4,
+  "coverage": {
+    "statements": {
+      "covered": 61,
+      "pct": 24.8,
+      "total": 246
+    },
+    "branches": {
+      "covered": 18,
+      "pct": 75,
+      "total": 24
+    },
+    "functions": {
+      "covered": 5,
+      "pct": 62.5,
+      "total": 8
+    },
+    "lines": {
+      "covered": 61,
+      "pct": 24.8,
+      "total": 246
+    }
+  }
+}

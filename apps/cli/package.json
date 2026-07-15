@@ -1,0 +1,28 @@
+{
+  "name": "@open-artifacts/cli",
+  "version": "0.1.0",
+  "description": "Run source-published Open Artifacts as local browser sessions.",
+  "type": "module",
+  "bin": {
+    "oa": "./dist/cli/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "dependencies": {
+    "commander": "^14.0.2",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "vite": "^8.1.4"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.14",
+    "typescript": "^5.8.3"
+  }
+}
