@@ -107,6 +107,7 @@ test('oa resolves registry specifiers into immutable script-free Artifact cache 
   assert.equal(registry.count('/tarballs/oa-registry-artifact-1.1.0.tgz'), 1);
   assert.equal(registry.count('/tarballs/oa-registry-artifact-1.0.0.tgz'), 1);
   assert.equal(registry.count('/tarballs/oa-registry-helper-1.0.0.tgz'), 1);
+  assert.equal(registry.count('/tarballs/oa-registry-peer-1.0.0.tgz'), 1);
   await assert.rejects(access(environment.scriptMarker), { code: 'ENOENT' });
   await assert.rejects(access(environment.dependencyScriptMarker), { code: 'ENOENT' });
 
@@ -196,6 +197,7 @@ test('oa inherits project npm config without persisting registry credentials', a
   const root = await mkdtemp(join(tmpdir(), 'open-artifacts-project-npmrc-'));
   const home = join(root, 'home');
   const projectRoot = join(root, 'project');
+  const globalConfig = join(root, 'global.npmrc');
   const registry = await createControlledRegistry();
   let sessionId;
   t.after(async () => {
@@ -205,10 +207,11 @@ test('oa inherits project npm config without persisting registry credentials', a
   });
   await Promise.all([mkdir(home, { recursive: true }), mkdir(projectRoot, { recursive: true })]);
   await Promise.all([
-    writeFile(join(home, '.npmrc'), 'registry=http://127.0.0.1:9/\n'),
+    writeFile(join(home, '.npmrc'), 'fund=false\n'),
+    writeFile(globalConfig, `registry=${registry.origin}/\n`),
     writeFile(
       join(projectRoot, '.npmrc'),
-      `registry=${registry.origin}/\n@oa-fixture:registry=${registry.origin}/\nlockfile-version=1\n//127.0.0.1:${new URL(registry.origin).port}/:_authToken=fixture-token-secret\n`,
+      `@oa-fixture:registry=${registry.origin}/\nlockfile-version=1\n//127.0.0.1:${new URL(registry.origin).port}/:_authToken=fixture-token-secret\n`,
     ),
     writeFile(
       join(projectRoot, 'package.json'),
@@ -218,7 +221,17 @@ test('oa inherits project npm config without persisting registry credentials', a
 
   const result = await runBuiltCliAsync(
     ['run', '@oa-fixture/private-artifact@1.0.0', '--json', '--no-open'],
-    { cwd: projectRoot, home, timeout: 60_000 },
+    {
+      cwd: projectRoot,
+      env: {
+        npm_config_globalconfig: globalConfig,
+        npm_config_userconfig: join(home, '.npmrc'),
+        NPM_CONFIG_GLOBALCONFIG: globalConfig,
+        NPM_CONFIG_USERCONFIG: join(home, '.npmrc'),
+      },
+      home,
+      timeout: 60_000,
+    },
   );
   assert.equal(result.status, 0, result.stderr || result.stdout);
   const session = JSON.parse(result.stdout);
@@ -241,6 +254,7 @@ test('oa inherits project npm config without persisting registry credentials', a
     JSON.parse(await readFile(join(cacheEntry, 'open-artifacts-provenance.json'), 'utf8')).registry,
     `${registry.origin}/`,
   );
+  assert.ok(registry.count('/oa-registry-peer') > 0);
   await stopSession(home, sessionId);
   sessionId = undefined;
 

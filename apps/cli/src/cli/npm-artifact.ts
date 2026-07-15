@@ -16,6 +16,7 @@ import {
   writeFile,
 } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
+import { createRequire } from 'node:module';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { promisify } from 'node:util';
@@ -26,6 +27,7 @@ import { resolveLocalArtifactPackage, type ResolvedArtifactPackage } from './art
 import { ArtifactPackageContractError, ArtifactReferenceError } from './errors.js';
 
 const executeFile = promisify(execFile);
+const requireFromCli = createRequire(import.meta.url);
 const supportedRegistryTypes = new Set(['range', 'tag', 'version']);
 const defaultRegistry = 'https://registry.npmjs.org/';
 const cacheContentManifestName = 'open-artifacts-content.json';
@@ -215,31 +217,17 @@ async function findProjectNpmConfig(invocationCwd: string) {
   return undefined;
 }
 
-function npmEnvironment(projectConfig: string | undefined) {
-  if (!projectConfig) return process.env;
-  const environment = { ...process.env };
-  const originalUserConfig =
-    environment.NPM_CONFIG_USERCONFIG ??
-    environment.npm_config_userconfig ??
-    join(homedir(), '.npmrc');
-  delete environment.NPM_CONFIG_GLOBALCONFIG;
-  delete environment.NPM_CONFIG_USERCONFIG;
-  delete environment.npm_config_globalconfig;
-  delete environment.npm_config_userconfig;
-  environment.NPM_CONFIG_GLOBALCONFIG = originalUserConfig;
-  environment.NPM_CONFIG_USERCONFIG = projectConfig;
-  // Keep explicit npm_config_* values: npm intentionally gives environment values precedence
-  // over project config, and OA must preserve the caller's effective npm configuration.
-  return environment;
+async function copyProjectNpmConfig(root: string, projectConfig: string | undefined) {
+  if (projectConfig) await cp(projectConfig, join(root, '.npmrc'));
 }
 
-async function runNpm(cwd: string, arguments_: string[], projectConfig?: string) {
+async function runNpm(cwd: string, arguments_: string[]) {
   try {
     const command = npmSubprocessCommand(arguments_);
     return await executeFile(command.executable, command.arguments, {
       cwd,
       encoding: 'utf8',
-      env: { ...npmEnvironment(projectConfig), ...command.environment },
+      env: { ...process.env, ...command.environment },
       maxBuffer: 1024 * 1024,
       timeout: 120_000,
     });
@@ -248,21 +236,17 @@ async function runNpm(cwd: string, arguments_: string[], projectConfig?: string)
   }
 }
 
-async function configuredRegistry(
-  root: string,
-  reference: NpmArtifactReference,
-  projectConfig?: string,
-) {
+async function configuredRegistry(root: string, reference: NpmArtifactReference) {
   const scope = reference.name.startsWith('@') ? reference.name.split('/')[0] : undefined;
   if (scope) {
     const scopedRegistry = (
-      await runNpm(root, ['config', 'get', `${scope}:registry`], projectConfig)
+      await runNpm(root, ['config', 'get', `${scope}:registry`])
     ).stdout.trim();
     if (scopedRegistry && scopedRegistry !== 'undefined') {
       return sanitizeRegistryUrl(scopedRegistry);
     }
   }
-  const registry = (await runNpm(root, ['config', 'get', 'registry'], projectConfig)).stdout.trim();
+  const registry = (await runNpm(root, ['config', 'get', 'registry'])).stdout.trim();
   return sanitizeRegistryUrl(registry || defaultRegistry);
 }
 
@@ -275,36 +259,35 @@ export function packageLockDependencyKey(name: string) {
 }
 
 async function writeResolutionProject(root: string, reference: NpmArtifactReference) {
+  const reactPackage = JSON.parse(
+    await readFile(requireFromCli.resolve('react/package.json'), 'utf8'),
+  ) as { version?: string };
+  if (!reactPackage.version) {
+    throw new ArtifactReferenceError('OA Runtime React identity is unavailable');
+  }
+  const dependencies: Record<string, string> = { [reference.name]: reference.selector };
+  if (reference.name !== 'react') dependencies.react = reactPackage.version;
   await writeFile(
     join(root, 'package.json'),
     `${JSON.stringify({
       name: 'open-artifacts-resolution',
       private: true,
       version: '0.0.0',
-      dependencies: { [reference.name]: reference.selector },
+      dependencies,
     })}\n`,
   );
 }
 
-async function resolveProvenance(
-  root: string,
-  reference: NpmArtifactReference,
-  projectConfig?: string,
-) {
-  await runNpm(
-    root,
-    [
-      'install',
-      '--package-lock-only',
-      '--lockfile-version=3',
-      '--ignore-scripts',
-      '--legacy-peer-deps',
-      '--omit=dev',
-      '--no-audit',
-      '--no-fund',
-    ],
-    projectConfig,
-  );
+async function resolveProvenance(root: string, reference: NpmArtifactReference) {
+  await runNpm(root, [
+    'install',
+    '--package-lock-only',
+    '--lockfile-version=3',
+    '--ignore-scripts',
+    '--omit=dev',
+    '--no-audit',
+    '--no-fund',
+  ]);
 
   const lock = JSON.parse(await readFile(join(root, 'package-lock.json'), 'utf8')) as PackageLock;
   const locked = lock.packages?.[packageLockDependencyKey(reference.name)];
@@ -316,7 +299,7 @@ async function resolveProvenance(
     integrity: locked.integrity,
     lockGraphDigest: packageLockGraphDigest(lock),
     name: reference.name,
-    registry: await configuredRegistry(root, reference, projectConfig),
+    registry: await configuredRegistry(root, reference),
     resolved: sanitizeRegistryUrl(locked.resolved),
     schemaVersion: 2,
     version: locked.version,
@@ -469,19 +452,15 @@ async function installCacheEntry(
       join(installRoot, 'package-lock.json'),
       await readFile(join(resolutionRoot, 'package-lock.json')),
     );
-    await runNpm(
-      installRoot,
-      [
-        'ci',
-        '--lockfile-version=3',
-        '--ignore-scripts',
-        '--legacy-peer-deps',
-        '--omit=dev',
-        '--no-audit',
-        '--no-fund',
-      ],
-      projectConfig,
-    );
+    await copyProjectNpmConfig(installRoot, projectConfig);
+    await runNpm(installRoot, [
+      'ci',
+      '--lockfile-version=3',
+      '--ignore-scripts',
+      '--omit=dev',
+      '--no-audit',
+      '--no-fund',
+    ]);
     const installedLockPath = join(installRoot, 'package-lock.json');
     await Promise.all([
       sanitizePackageLock(installedLockPath),
@@ -684,7 +663,8 @@ export async function resolveNpmArtifactPackage(
 
   try {
     await writeResolutionProject(resolutionRoot, reference);
-    const provenance = await resolveProvenance(resolutionRoot, reference, projectConfig);
+    await copyProjectNpmConfig(resolutionRoot, projectConfig);
+    const provenance = await resolveProvenance(resolutionRoot, reference);
     const cacheKey = artifactCacheKey(provenance);
     const cacheEntry = join(cacheRoot, cacheKey);
     const cached = await validateCachedPackage(cacheRoot, cacheEntry, provenance);

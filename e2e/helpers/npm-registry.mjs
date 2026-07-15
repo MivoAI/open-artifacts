@@ -73,7 +73,7 @@ function artifactManifest(name, version, options = {}) {
       './package.json': './package.json',
     },
     openArtifacts: { format: options.format ?? 'react-render/v0' },
-    peerDependencies: { react: '^19.0.0' },
+    peerDependencies: { 'oa-registry-peer': '^1.0.0', react: '^19.0.0' },
     dependencies: { 'oa-registry-helper': '1.0.0' },
     scripts: {
       install:
@@ -87,7 +87,7 @@ function artifactFiles(name, version, options = {}) {
   return {
     'package.json': json(manifest),
     'src/index.tsx':
-      "import { helperLabel } from 'oa-registry-helper';\nexport default function RegistryArtifact({ data }) { return <h1>{helperLabel}: {data.message}</h1>; }\n",
+      "import { helperLabel } from 'oa-registry-helper';\nimport { peerLabel } from 'oa-registry-peer';\nexport default function RegistryArtifact({ data }) { return <h1>{helperLabel} + {peerLabel}: {data.message}</h1>; }\n",
     'input.schema.json': json({
       $schema: 'https://json-schema.org/draft/2020-12/schema',
       type: 'object',
@@ -105,7 +105,8 @@ function artifactFiles(name, version, options = {}) {
 export async function createControlledRegistry(options = {}) {
   const root = await mkdtemp(join(tmpdir(), 'open-artifacts-registry-'));
   const mirroredPackages = new Map();
-  for (const packageRoot of options.mirrorPackageRoots ?? []) {
+  const defaultMirrorRoots = [join(import.meta.dirname, '..', '..', 'node_modules', 'react')];
+  for (const packageRoot of [...defaultMirrorRoots, ...(options.mirrorPackageRoots ?? [])]) {
     const manifest = JSON.parse(await readFile(join(packageRoot, 'package.json'), 'utf8'));
     if (typeof manifest.name !== 'string' || typeof manifest.version !== 'string') {
       throw new Error(`Cannot mirror package without name and version: ${packageRoot}`);
@@ -132,6 +133,16 @@ export async function createControlledRegistry(options = {}) {
   const helperTarball = await createTarball(root, 'helper', '1.0.0', {
     'package.json': json(helperManifest),
     'index.js': "export const helperLabel = 'registry helper';\n",
+  });
+  const peerManifest = {
+    name: 'oa-registry-peer',
+    version: '1.0.0',
+    type: 'module',
+    exports: './index.js',
+  };
+  const peerTarball = await createTarball(root, 'peer', '1.0.0', {
+    'package.json': json(peerManifest),
+    'index.js': "export const peerLabel = 'required peer';\n",
   });
   const artifactTarballs = new Map();
   for (const version of ['1.0.0', '1.1.0', '2.0.0']) {
@@ -209,6 +220,14 @@ export async function createControlledRegistry(options = {}) {
         'dist-tags': { latest: '1.0.0' },
         versions: {
           '1.0.0': withDist(helperManifest, 'oa-registry-helper-1.0.0.tgz', helperTarball),
+        },
+      };
+    } else if (decodeURIComponent(url.pathname.slice(1)) === 'oa-registry-peer') {
+      packument = {
+        name: 'oa-registry-peer',
+        'dist-tags': { latest: '1.0.0' },
+        versions: {
+          '1.0.0': withDist(peerManifest, 'oa-registry-peer-1.0.0.tgz', peerTarball),
         },
       };
     } else if (decodeURIComponent(url.pathname.slice(1)) === 'oa-invalid-artifact') {
