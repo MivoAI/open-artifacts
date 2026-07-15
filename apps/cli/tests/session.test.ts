@@ -11,7 +11,9 @@ import {
   parseRuntimeReadyState,
   parseSessionRecord,
   parseWindowsProcessSignatureOutput,
+  processQueryFailure,
   publishJsonAtomically,
+  readRuntimeReadyStateState,
   readyMatchesRecord,
   settleWithin,
   stopOwnedRuntimeProcess,
@@ -138,6 +140,16 @@ describe('process and health ownership', () => {
     });
   });
 
+  it('does not treat a generic process-query exit as proof that the PID is missing', () => {
+    expect(processQueryFailure({ code: 1, stderr: 'permission denied', stdout: '' })).toBe(
+      'unavailable',
+    );
+    expect(processQueryFailure({ code: 1, stderr: '', stdout: '' })).toBe('missing');
+    expect(
+      processQueryFailure({ code: 1, stderr: 'ps: process id too large: 999999', stdout: '' }),
+    ).toBe('missing');
+  });
+
   it('requires the Runtime health tuple to match the Session Record exactly', () => {
     expect(
       healthMatchesRecord(record, {
@@ -168,6 +180,19 @@ describe('process and health ownership', () => {
     expect(readyMatchesRecord(record, { ...ready!, pid: record.pid + 1 })).toBe(false);
   });
 
+  it('distinguishes a missing ready file from a transient read failure', async () => {
+    const error = (code: string) => Object.assign(new Error(code), { code });
+    await expect(
+      readRuntimeReadyStateState('/missing', async () => Promise.reject(error('ENOENT'))),
+    ).resolves.toEqual({ status: 'missing' });
+    await expect(
+      readRuntimeReadyStateState('/busy', async () => Promise.reject(error('EMFILE'))),
+    ).resolves.toEqual({ status: 'unavailable' });
+    await expect(readRuntimeReadyStateState('/invalid', async () => '{')).resolves.toEqual({
+      status: 'invalid',
+    });
+  });
+
   it('bounds a stalled process query by the shared stop deadline', async () => {
     const startedAt = Date.now();
     await expect(
@@ -193,11 +218,13 @@ describe('process and health ownership', () => {
           forceTimeoutMs: 10,
           gracefulTimeoutMs: 10,
           kill,
+          platform: 'linux',
           readState,
           requestShutdown: async () => true,
         },
       ),
     ).resolves.toBe(false);
+    expect(kill).toHaveBeenCalledWith(record.pid, 'SIGTERM');
     expect(kill).toHaveBeenCalledWith(record.pid, 'SIGKILL');
   });
 });

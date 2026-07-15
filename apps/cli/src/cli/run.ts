@@ -94,13 +94,17 @@ export async function terminateFailedRuntime(
   instanceToken: string,
   gracefulTimeoutMs = 3_000,
   forceTimeoutMs = 1_000,
+  requestShutdown: typeof requestRuntimeShutdown = requestRuntimeShutdown,
+  platform: NodeJS.Platform = process.platform,
 ) {
   if (await waitForChildExit(child, 0)) return true;
 
   const ready = await readRuntimeReadyState(readyFile);
   if (ready && ready.pid === child.pid) {
-    await requestRuntimeShutdown(ready, instanceToken);
-  } else if (process.platform !== 'win32') {
+    await requestShutdown(ready, instanceToken);
+  }
+  if (await waitForChildExit(child, 0)) return true;
+  if (platform !== 'win32') {
     child.kill('SIGTERM');
   }
   if (await waitForChildExit(child, gracefulTimeoutMs)) return true;

@@ -268,4 +268,28 @@ describe('Runtime readiness', () => {
       'secret-token',
     );
   });
+
+  it('falls back to SIGTERM on Unix when authenticated cleanup does not stop the child', async () => {
+    const fixtureRoot = await mkdtemp(join(tmpdir(), 'open-artifacts-cleanup-sigterm-'));
+    temporaryDirectories.push(fixtureRoot);
+    const readyFile = join(fixtureRoot, 'ready.json');
+    const child = Object.assign(new EventEmitter(), {
+      exitCode: null,
+      kill: vi.fn(() => true),
+      pid: 4321,
+      signalCode: null,
+    }) as unknown as ChildProcess;
+    await writeFile(
+      readyFile,
+      JSON.stringify({ instanceId: 'instance', pid: child.pid, url: 'http://127.0.0.1:4321/' }),
+    );
+    const requestShutdown = vi.fn(async () => false);
+
+    await expect(
+      terminateFailedRuntime(child, readyFile, 'secret-token', 5, 5, requestShutdown, 'linux'),
+    ).resolves.toBe(false);
+    expect(requestShutdown).toHaveBeenCalledOnce();
+    expect(child.kill).toHaveBeenNthCalledWith(1, 'SIGTERM');
+    expect(child.kill).toHaveBeenLastCalledWith('SIGKILL');
+  });
 });

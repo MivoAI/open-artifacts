@@ -194,13 +194,13 @@ test('process ownership remains stable when Session commands use different timez
   });
 });
 
-test('list prunes dead, misowned, and ready-mismatched Session Records', async (t) => {
+test('list prunes malformed, dead, misowned, and ready-mismatched Session Records', async (t) => {
   buildCli();
   const home = await mkdtemp(join(tmpdir(), 'open-artifacts-stale-'));
   const active = startSession(home);
   const activeRecord = await sessionRecord(home, active.sessionId);
   const sessionsRoot = join(home, '.open-artifacts', 'sessions');
-  const staleIds = ['nonexistent', 'misowned', 'ready-mismatch'];
+  const staleIds = ['malformed', 'nonexistent', 'misowned', 'ready-mismatch'];
 
   t.after(async () => {
     stopSession(home, active.sessionId);
@@ -208,6 +208,7 @@ test('list prunes dead, misowned, and ready-mismatched Session Records', async (
   });
 
   for (const staleId of staleIds) await mkdir(join(sessionsRoot, staleId), { recursive: true });
+  await writeFile(join(sessionsRoot, 'malformed', 'record.json'), '{oops\n');
   await writeFile(
     join(sessionsRoot, 'nonexistent', 'record.json'),
     `${JSON.stringify({ ...activeRecord, pid: 999_999, sessionId: 'nonexistent' })}\n`,
