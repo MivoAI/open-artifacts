@@ -25,5 +25,10 @@
   "timeline": {
     "title": "Opening study",
     "trackLabel": "Picture 01"
+  },
+  "brief": {
+    "treatments": ["tighten-pacing"],
+    "targetPlatform": "youtube-shorts",
+    "aspectRatio": "16:9"
   }
 }

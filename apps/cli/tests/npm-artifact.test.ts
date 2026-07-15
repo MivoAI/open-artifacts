@@ -257,6 +257,11 @@ describe('npm dependency lock graph identity', () => {
 });
 
 describe('npm Artifact Reference parsing', () => {
+  it.each(['.', '..'])('does not accept bare %s as an explicit local reference', (reference) => {
+    expect(isLocalArtifactReference(reference, 'darwin')).toBe(false);
+    expect(isLocalArtifactReference(reference, 'win32')).toBe(false);
+  });
+
   it.each([
     String.raw`.\artifact`,
     String.raw`..\artifact`,

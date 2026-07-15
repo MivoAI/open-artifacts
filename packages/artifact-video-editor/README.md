@@ -4,8 +4,9 @@ An original Open Artifacts editing surface that lets an Agent and a person inspe
 video, playback state, playhead, and selection. The viewport is divided into a project bar, Agent
 surface, media library, and preview/timeline workspace.
 
-The Artifact Input shape is `{ project, agent, media, timeline }`; the exact JSON Schema lives in
-`input.schema.json` and a complete input is in `example.json`. The default export accepts only
+The Artifact Input shape is `{ project, agent, media, timeline, brief }`. The Brief selects one or
+more editing treatments, a target platform, and an aspect ratio from the finite options in
+`input.schema.json`; a complete input is in `example.json`. The default export accepts only
 `{ data }`. React is supplied as a peer dependency, while the source, scoped CSS, and demo media are
 owned by this package.
 

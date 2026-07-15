@@ -7,9 +7,10 @@
   --ve-line: #26303d;
   --ve-accent: #a8f04b;
   --ve-blue: #46a9ff;
+  position: relative;
   width: 100%;
   min-width: 1080px;
-  height: 100%;
+  height: 100vh;
   min-height: 680px;
   overflow: hidden;
   background: var(--ve-bg);
@@ -23,7 +24,8 @@
   }
 
   button,
-  input {
+  input,
+  select {
     font: inherit;
   }
 
@@ -145,6 +147,7 @@
     flex-direction: column;
     border-right: 1px solid var(--ve-line);
     background: var(--ve-panel);
+    overflow: hidden;
   }
 
   .ve-panel-heading,
@@ -177,11 +180,16 @@
     box-shadow: 0 0 0 4px rgb(168 240 75 / 10%);
   }
 
-  .ve-agent-brief {
+  .ve-agent-body {
+    display: flex;
     flex: 1 1 auto;
     min-height: 0;
-    padding: 24px 20px;
+    flex-direction: column;
     overflow-y: auto;
+  }
+
+  .ve-agent-brief {
+    padding: 18px 20px 14px;
   }
 
   .ve-brief-label {
@@ -190,8 +198,8 @@
 
   .ve-agent-brief h2 {
     max-width: 270px;
-    margin: 16px 0 10px;
-    font-size: 25px;
+    margin: 10px 0 8px;
+    font-size: 21px;
     font-weight: 580;
     letter-spacing: -0.04em;
     line-height: 1.05;
@@ -207,7 +215,7 @@
   .ve-agent-brief ol {
     display: grid;
     gap: 0;
-    margin: 24px 0 0;
+    margin: 12px 0 0;
     padding: 0;
     border-top: 1px solid var(--ve-line);
     list-style: none;
@@ -215,64 +223,118 @@
 
   .ve-agent-brief li {
     display: grid;
-    min-height: 56px;
+    min-height: 34px;
     align-items: center;
     border-bottom: 1px solid var(--ve-line);
     color: #c5ced7;
-    font-size: 11px;
-    line-height: 1.4;
-    grid-template-columns: 32px 1fr;
+    font-size: 9px;
+    line-height: 1.35;
+    grid-template-columns: 26px 1fr;
   }
 
   .ve-agent-brief li span {
     color: #65717f;
     font-family: 'SFMono-Regular', Consolas, monospace;
-    font-size: 9px;
+    font-size: 8px;
   }
 
   .ve-agent-composer {
     flex: 0 0 auto;
-    margin: 0 14px 14px;
+    margin: 10px 14px 14px;
     padding: 14px;
     border: 1px solid #313d4c;
     border-radius: 8px;
     background: var(--ve-panel-raised);
   }
 
-  .ve-agent-composer > p {
-    min-height: 42px;
-    margin: 0;
-    color: #778493;
-    font-size: 11px;
-    line-height: 1.5;
+  .ve-agent-composer fieldset {
+    display: flex;
+    gap: 6px;
+    margin: 12px 0;
+    padding: 0;
+    border: 0;
   }
 
-  .ve-agent-composer > div {
+  .ve-agent-composer > p {
+    margin: 8px 0 0;
+    color: #778493;
+    font-size: 9px;
+    line-height: 1.4;
+  }
+
+  .ve-agent-composer legend,
+  .ve-agent-composer > label {
+    color: #8f9baa;
+    font-size: 9px;
+  }
+
+  .ve-agent-composer fieldset label {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 4px;
+    color: #c8d1da;
+    font-size: 9px;
+  }
+
+  .ve-agent-composer input {
+    accent-color: var(--ve-accent);
+  }
+
+  .ve-agent-composer > label {
+    display: grid;
+    gap: 5px;
+    margin-top: 8px;
+  }
+
+  .ve-agent-composer select {
+    width: 100%;
+    height: 28px;
+    padding: 0 7px;
+    border: 1px solid #354252;
+    border-radius: 4px;
+    background: #0e151e;
+    color: var(--ve-ink);
+    font-size: 10px;
   }
 
   .ve-agent-composer button {
-    display: grid;
-    width: 27px;
-    height: 27px;
-    flex: 0 0 auto;
-    place-items: center;
-    border-radius: 50%;
-    background: #242f3c;
-    font-size: 14px;
-  }
-
-  .ve-agent-composer button:last-child {
+    width: 100%;
+    height: 30px;
+    margin-top: 12px;
+    border-radius: 4px;
     background: var(--ve-accent);
     color: #15200d;
+    font-size: 10px;
+    font-weight: 700;
   }
 
-  .ve-agent-composer span {
-    flex: 1;
-    color: #687685;
+  .ve-agent-composer button:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+
+  .ve-conversation {
+    display: grid;
+    gap: 8px;
+    padding: 0 14px;
+  }
+
+  .ve-conversation article {
+    display: grid;
+    gap: 4px;
+    padding: 10px 12px;
+    border-left: 2px solid var(--ve-accent);
+    background: #151e29;
+  }
+
+  .ve-conversation small,
+  .ve-conversation span {
+    color: #7f8d9c;
     font-size: 9px;
+  }
+
+  .ve-conversation strong {
+    font-size: 10px;
   }
 
   .ve-library-heading {
@@ -417,14 +479,22 @@
     background: radial-gradient(circle at center, rgb(70 169 255 / 5%), transparent 55%), #070a0f;
   }
 
-  .ve-video-shell video {
+  .ve-video-frame {
+    width: auto;
     max-width: 100%;
     height: 100%;
     max-height: 100%;
+    overflow: hidden;
     border-radius: 2px;
     outline: 1px solid #252e3a;
     background: #000;
     box-shadow: 0 16px 45px rgb(0 0 0 / 45%);
+  }
+
+  .ve-video-frame video {
+    display: block;
+    width: 100%;
+    height: 100%;
     object-fit: contain;
   }
 
@@ -556,6 +626,27 @@
     background-size: 25% 100%;
   }
 
+  .ve-track-lane ul {
+    position: absolute;
+    right: 14px;
+    bottom: 9px;
+    left: 14px;
+    display: flex;
+    gap: 5px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .ve-track-lane li {
+    padding: 3px 6px;
+    border: 1px solid #6158a4;
+    border-radius: 3px;
+    background: #292548;
+    color: #cfcaff;
+    font-size: 8px;
+  }
+
   .ve-timeline-clip {
     position: relative;
     height: 78px;
@@ -630,9 +721,52 @@
     opacity: 0;
   }
 
+  .ve-export-dialog {
+    position: fixed;
+    inset: 0;
+    width: 280px;
+    height: max-content;
+    margin: auto;
+    padding: 20px;
+    border: 1px solid #3a4655;
+    border-radius: 8px;
+    background: #151d28;
+    color: var(--ve-ink);
+    box-shadow: 0 18px 60px rgb(0 0 0 / 55%);
+  }
+
+  .ve-export-dialog::backdrop {
+    background: rgb(3 6 10 / 72%);
+  }
+
+  .ve-export-dialog h2 {
+    margin: 10px 0 16px;
+    font-size: 20px;
+  }
+
+  .ve-export-dialog strong {
+    font-size: 12px;
+  }
+
+  .ve-export-dialog p {
+    margin: 8px 0 18px;
+    color: #98a5b2;
+    font-size: 11px;
+  }
+
+  .ve-export-dialog button {
+    width: 100%;
+    height: 30px;
+    border-radius: 4px;
+    background: var(--ve-accent);
+    color: #15200d;
+    font-size: 10px;
+    font-weight: 700;
+  }
+
   @media (max-height: 760px) {
     .ve-agent-brief {
-      padding-top: 17px;
+      padding-top: 14px;
     }
 
     .ve-agent-brief h2 {
@@ -645,7 +779,7 @@
     }
 
     .ve-agent-brief li {
-      min-height: 46px;
+      min-height: 42px;
     }
   }
 }

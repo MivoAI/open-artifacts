@@ -85,10 +85,10 @@ describe('local Artifact Package resolution', () => {
     expect(artifactPackage.exampleInput).toEqual({ message: 'hello' });
   });
 
-  it('accepts the current directory as an explicit local Artifact Reference', async () => {
+  it('accepts ./ as an explicit local Artifact Reference', async () => {
     const fixture = await createArtifactFixture();
 
-    await expect(resolveLocalArtifactPackage('.', fixture.artifactRoot)).resolves.toMatchObject({
+    await expect(resolveLocalArtifactPackage('./', fixture.artifactRoot)).resolves.toMatchObject({
       identity: { name: '@open-artifacts/unit-fixture' },
     });
   });

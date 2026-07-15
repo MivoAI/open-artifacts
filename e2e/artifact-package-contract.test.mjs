@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { access, readFile, readdir } from 'node:fs/promises';
 import { resolve, sep } from 'node:path';
 import test from 'node:test';
@@ -79,4 +80,33 @@ test('the repository ships the canonical forkable Artifact Packages', async () =
     );
     assert.equal(manifest.name, expectedPackage.name);
   }
+});
+
+test('the packed Video Editor contains the complete forkable source package', () => {
+  const result = spawnSync(
+    'npm',
+    ['pack', '--workspace', '@open-artifacts/video-editor', '--dry-run', '--json'],
+    {
+      cwd: resolve(import.meta.dirname, '..'),
+      encoding: 'utf8',
+    },
+  );
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const [pack] = JSON.parse(result.stdout);
+  assert.deepEqual(
+    pack.files.map(({ path }) => path),
+    [
+      'README.md',
+      'assets/demo-h264.mp4',
+      'assets/demo-poster.jpg',
+      'example.json',
+      'input.schema.json',
+      'package.json',
+      'src/index.tsx',
+      'src/model.ts',
+      'src/styles.css',
+      'tsconfig.json',
+    ],
+  );
 });

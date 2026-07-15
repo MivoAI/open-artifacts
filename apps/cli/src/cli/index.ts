@@ -1,17 +1,34 @@
 #!/usr/bin/env node
 
-import { Command } from 'commander';
+import { Command, CommanderError } from 'commander';
 
-import { writeCliError } from './errors.js';
+import { CliUsageError, writeCliError } from './errors.js';
 import { runArtifactPackage } from './run.js';
 import { listArtifactSessions, stopArtifactSession } from './session.js';
 
 const program = new Command();
+const rawArguments = process.argv.slice(2);
+const optionTerminator = rawArguments.indexOf('--');
+const jsonRequested = rawArguments
+  .slice(0, optionTerminator === -1 ? rawArguments.length : optionTerminator)
+  .includes('--json');
+let commanderOutput = '';
 
 program
   .name('oa')
   .description('Run source-published Open Artifacts as local browser sessions.')
-  .version('0.1.0');
+  .version('0.1.0')
+  .helpCommand(false)
+  .exitOverride()
+  .configureOutput({
+    writeOut: (text) => {
+      if (jsonRequested) commanderOutput += text;
+      else process.stdout.write(text);
+    },
+    writeErr: (text) => {
+      if (!jsonRequested) process.stderr.write(text);
+    },
+  });
 
 const runCommand = program
   .command('run')
@@ -40,7 +57,10 @@ runCommand.addHelpText(
   '\nSecurity: oa executes trusted Artifact Source without a security sandbox.\n',
 );
 
-const session = program.command('session').description('Manage Active Artifact Sessions');
+const session = program
+  .command('session')
+  .description('Manage Active Artifact Sessions')
+  .helpCommand(false);
 
 session
   .command('list')
@@ -69,4 +89,23 @@ session
     }
   });
 
-await program.parseAsync();
+try {
+  await program.parseAsync();
+} catch (error) {
+  if (error instanceof CommanderError && error.code === 'commander.helpDisplayed') {
+    if (jsonRequested) {
+      process.stdout.write(`${JSON.stringify({ help: commanderOutput.trimEnd() })}\n`);
+    }
+    process.exitCode = error.exitCode;
+  } else if (error instanceof CommanderError && error.code === 'commander.version') {
+    if (jsonRequested) {
+      process.stdout.write(`${JSON.stringify({ version: commanderOutput.trim() })}\n`);
+    }
+    process.exitCode = error.exitCode;
+  } else if (error instanceof CommanderError) {
+    if (jsonRequested) writeCliError(new CliUsageError(error.message), true);
+    process.exitCode = error.exitCode || 1;
+  } else {
+    throw error;
+  }
+}
