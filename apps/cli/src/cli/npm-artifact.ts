@@ -30,6 +30,7 @@ const supportedRegistryTypes = new Set(['range', 'tag', 'version']);
 const defaultRegistry = 'https://registry.npmjs.org/';
 const cacheContentManifestName = 'open-artifacts-content.json';
 const cacheLockWaitMilliseconds = 120_000;
+const cacheLockMaximumAgeMilliseconds = 10 * 60_000;
 const ownerlessCacheLockGraceMilliseconds = 5_000;
 const windowsNpmScript = [
   "$ErrorActionPreference = 'Stop'",
@@ -556,6 +557,7 @@ export async function withCacheEntryLock<T>(
     ]);
     if (!metadata) return false;
     const age = Date.now() - metadata.mtimeMs;
+    if (age >= cacheLockMaximumAgeMilliseconds) return false;
     if (owner?.token === token && owner.pid && Number.isSafeInteger(owner.pid)) {
       try {
         process.kill(owner.pid, 0);
@@ -575,9 +577,9 @@ export async function withCacheEntryLock<T>(
     const quarantinePath = join(cacheRoot, `.${cacheKey}.stale-${token}-${randomUUID()}`);
     try {
       await rename(claimPath, quarantinePath);
-      const quarantinedOwner = await readOwner(quarantinePath);
-      if (owner?.token && quarantinedOwner?.token !== owner.token) {
-        await rename(quarantinePath, claimPath).catch(() => undefined);
+      // The claim may have finished publishing its owner while the rename was in flight.
+      if (await claimIsAlive(quarantinePath, token)) {
+        await rename(quarantinePath, claimPath);
         return;
       }
       await rm(quarantinePath, { force: true, recursive: true });
