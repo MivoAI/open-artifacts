@@ -244,6 +244,18 @@ test('oa run rejects each required Artifact Package Contract boundary', async (t
       expectedPath: '$.inputContract.$schema',
     },
     {
+      name: 'asynchronous Input Contract',
+      arrange: (home) =>
+        createArtifactPackage(home, {
+          schema: {
+            $schema: 'https://json-schema.org/draft/2020-12/schema',
+            $async: true,
+            type: 'object',
+          },
+        }),
+      expectedPath: '$.inputContract.$async',
+    },
+    {
       name: 'React implementation dependency',
       arrange: (home) =>
         createArtifactPackage(home, { manifest: { dependencies: { react: '^19.0.0' } } }),

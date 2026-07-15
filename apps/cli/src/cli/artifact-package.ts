@@ -336,6 +336,14 @@ export async function resolveLocalArtifactPackage(
       },
     ]);
   }
+  if ('$async' in validateInput && validateInput.$async === true) {
+    throw new ArtifactPackageContractError([
+      {
+        path: '$.inputContract.$async',
+        message: 'asynchronous Input Contracts are not supported',
+      },
+    ]);
+  }
 
   const exampleInput = await readJson(resources['example.json'], '$.example');
   const validateResolvedInput = (input: unknown, prefix = '$') => {
