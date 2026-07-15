@@ -1,6 +1,6 @@
 import { mkdtemp, readFile, realpath, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { isAbsolute, relative, resolve } from 'node:path';
+import { isAbsolute, relative, resolve, win32 } from 'node:path';
 
 import Ajv2020Import from 'ajv/dist/2020.js';
 import type { AnySchema, ErrorObject, ValidateFunction } from 'ajv';
@@ -80,6 +80,20 @@ export interface ResolvedArtifactPackage {
   exampleInput: unknown;
   identity: ArtifactIdentity;
   validateInput(input: unknown): CliIssue[];
+}
+
+export function isLocalArtifactReference(
+  reference: string,
+  platform: NodeJS.Platform = process.platform,
+) {
+  return (
+    (platform === 'win32' ? win32.isAbsolute(reference) : isAbsolute(reference)) ||
+    reference === '.' ||
+    reference === '..' ||
+    reference.startsWith('./') ||
+    reference.startsWith('../') ||
+    (platform === 'win32' && (reference.startsWith('.\\') || reference.startsWith('..\\')))
+  );
 }
 
 const Ajv2020 = Ajv2020Import as unknown as typeof Ajv2020Constructor;
@@ -215,6 +229,7 @@ async function smokeRenderArtifactSource(
   artifactRoot: string,
   entryPath: string,
   exampleInput: unknown,
+  dependencyRoot = artifactRoot,
 ) {
   const runtimeRoot = reactResolutionRoot();
   const cacheDirectory = await mkdtemp(resolve(tmpdir(), 'open-artifacts-smoke-render-'));
@@ -230,7 +245,7 @@ async function smokeRenderArtifactSource(
       root: runtimeRoot,
       server: {
         middlewareMode: true,
-        fs: { allow: [artifactRoot, runtimeRoot] },
+        fs: { allow: [artifactRoot, dependencyRoot, runtimeRoot] },
       },
     });
     const artifactModule = (await server.ssrLoadModule(`/@fs/${normalizePath(entryPath)}`)) as {
@@ -275,13 +290,9 @@ async function smokeRenderArtifactSource(
 export async function resolveLocalArtifactPackage(
   reference: string,
   cwd: string,
+  options: { dependencyRoot?: string } = {},
 ): Promise<ResolvedArtifactPackage> {
-  const isExplicitRelative =
-    reference === '.' ||
-    reference === '..' ||
-    reference.startsWith('./') ||
-    reference.startsWith('../');
-  if (!isExplicitRelative && !isAbsolute(reference)) {
+  if (!isLocalArtifactReference(reference)) {
     throw new ArtifactReferenceError(
       `Only explicit local Artifact References are currently supported; received: ${reference}`,
     );
@@ -352,11 +363,17 @@ export async function resolveLocalArtifactPackage(
   };
   const exampleIssues = validateResolvedInput(exampleInput, '$.example');
   if (exampleIssues.length > 0) throw new ArtifactPackageContractError(exampleIssues);
-  await smokeRenderArtifactSource(root, resources['src/index.tsx'], exampleInput);
+  await smokeRenderArtifactSource(
+    root,
+    resources['src/index.tsx'],
+    exampleInput,
+    options.dependencyRoot,
+  );
 
   return {
     exampleInput,
     identity: {
+      ...(options.dependencyRoot ? { dependencyRoot: options.dependencyRoot } : {}),
       entryPath: resources['src/index.tsx'],
       name: manifest.name,
       root,

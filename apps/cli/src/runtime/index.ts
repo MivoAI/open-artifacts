@@ -193,7 +193,12 @@ async function startRuntime(config: SessionRuntimeConfig, instanceToken: string)
     root: renderRoot,
     server: {
       fs: {
-        allow: [config.artifact.root, renderRoot, reactRuntimeDirectory()],
+        allow: [
+          config.artifact.root,
+          ...(config.artifact.dependencyRoot ? [config.artifact.dependencyRoot] : []),
+          renderRoot,
+          reactRuntimeDirectory(),
+        ],
       },
       host: '127.0.0.1',
       port: 0,

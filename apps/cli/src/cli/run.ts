@@ -12,8 +12,8 @@ import {
   selectArtifactInput,
   type ArtifactInputOptions,
 } from './artifact-input.js';
-import { resolveLocalArtifactPackage } from './artifact-package.js';
 import { ArtifactSessionCleanupError, ArtifactSessionStartError } from './errors.js';
+import { resolveArtifactPackageReference } from './npm-artifact.js';
 import {
   publishJsonAtomically,
   readProcessSignature,
@@ -124,7 +124,7 @@ function openBrowser(url: string) {
 export async function runArtifactPackage(reference: string, options: RunOptions) {
   assertArtifactInputOptions(options);
   const invocationCwd = process.cwd();
-  const artifactPackage = await resolveLocalArtifactPackage(reference, invocationCwd);
+  const artifactPackage = await resolveArtifactPackageReference(reference, invocationCwd);
   const artifactInput = await selectArtifactInput(artifactPackage, options, invocationCwd);
   const sessionId = randomUUID();
   const instanceToken = randomBytes(32).toString('hex');
