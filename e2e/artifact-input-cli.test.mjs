@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import test from 'node:test';
@@ -110,6 +110,39 @@ test('oa run --input resolves files from invocation cwd and reaches the Render i
   sessionId = session.sessionId;
   assert.equal(session.artifact.name, '@open-artifacts/evidence-trace');
   await assertRuntimeInput(home, session, input, 'file-input-marker');
+});
+
+test('oa run keeps the invocation cwd when trusted source changes the process cwd', async (t) => {
+  const home = await mkdtemp(join(tmpdir(), 'open-artifacts-stable-input-cwd-'));
+  const invocationDirectory = join(home, 'invocation');
+  const artifactCopy = join(home, 'artifact');
+  let sessionId;
+  t.after(async () => {
+    if (sessionId) await stopSession(home, sessionId);
+    await rm(home, { force: true, recursive: true });
+  });
+  await Promise.all([
+    mkdir(invocationDirectory),
+    cp(artifactRoot, artifactCopy, { recursive: true }),
+  ]);
+  const sourcePath = join(artifactCopy, 'src/index.tsx');
+  const source = await readFile(sourcePath, 'utf8');
+  await writeFile(
+    sourcePath,
+    `if (typeof process !== 'undefined') process.chdir(${JSON.stringify(tmpdir())});\n${source}`,
+  );
+  const input = await exampleInput('stable-invocation-cwd-marker');
+  await writeFile(join(invocationDirectory, 'artifact-input.json'), JSON.stringify(input));
+
+  const result = runBuiltCli(
+    ['run', artifactCopy, '--input', './artifact-input.json', '--json', '--no-open'],
+    { cwd: invocationDirectory, home },
+  );
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const session = JSON.parse(result.stdout);
+  sessionId = session.sessionId;
+  await assertRuntimeInput(home, session, input, 'stable-invocation-cwd-marker');
 });
 
 test('oa run rejects conflicting input options before creating a Session', async (t) => {

@@ -107,8 +107,9 @@ function openBrowser(url: string) {
 
 export async function runArtifactPackage(reference: string, options: RunOptions) {
   assertArtifactInputOptions(options);
-  const artifactPackage = await resolveLocalArtifactPackage(reference, process.cwd());
-  const artifactInput = await selectArtifactInput(artifactPackage, options, process.cwd());
+  const invocationCwd = process.cwd();
+  const artifactPackage = await resolveLocalArtifactPackage(reference, invocationCwd);
+  const artifactInput = await selectArtifactInput(artifactPackage, options, invocationCwd);
   const sessionId = randomUUID();
   const sessionDirectory = resolve(homedir(), '.open-artifacts', 'sessions', sessionId);
   const readyFile = resolve(sessionDirectory, 'ready.json');
