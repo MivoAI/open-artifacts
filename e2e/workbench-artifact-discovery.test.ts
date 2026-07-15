@@ -26,6 +26,10 @@ describe('Workbench Artifact Package discovery', () => {
             directory: 'artifact-evidence-trace',
             name: '@open-artifacts/evidence-trace',
           },
+          {
+            directory: 'artifact-video-editor',
+            name: '@open-artifacts/video-editor',
+          },
         ]),
       );
     } finally {

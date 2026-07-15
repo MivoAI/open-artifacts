@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "module": "packages/artifact-video-editor",
+  "command": "npm run test",
+  "status": "measured",
+  "files": 2,
+  "coverage": {
+    "statements": {
+      "covered": 0,
+      "pct": 0,
+      "total": 224
+    },
+    "branches": {
+      "covered": 0,
+      "pct": 0,
+      "total": 2
+    },
+    "functions": {
+      "covered": 0,
+      "pct": 0,
+      "total": 2
+    },
+    "lines": {
+      "covered": 0,
+      "pct": 0,
+      "total": 224
+    }
+  }
+}
