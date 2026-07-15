@@ -54,11 +54,14 @@ async function createArtifactFixture(format = 'react-render/v0') {
         properties: { message: { type: 'string' } },
       })}\n`,
     ),
-    writeFile(join(artifactRoot, 'README.md'), '# Unit fixture\n'),
+    writeFile(
+      join(artifactRoot, 'README.md'),
+      '# Unit fixture\n\nRenders Artifact Input shaped as `{ message: string }` with React. React is provided as a peer dependency. Copy the directory to create a Local Fork.\n',
+    ),
     writeFile(join(artifactRoot, 'tsconfig.json'), '{}\n'),
     writeFile(
       join(artifactRoot, 'src/index.tsx'),
-      'export default function UnitFixture() { return null; }\n',
+      'export default function UnitFixture({ data }: { data: unknown }) { void data; return null; }\n',
     ),
   ]);
   return { artifactRoot, fixtureRoot };
@@ -89,7 +92,7 @@ describe('local Artifact Package resolution', () => {
 
   it('keeps bare npm-like references outside the local tracer bullet', async () => {
     await expect(resolveLocalArtifactPackage('@scope/package', process.cwd())).rejects.toThrow(
-      /explicit local Artifact References only/,
+      /Only explicit local Artifact References are currently supported/,
     );
   });
 

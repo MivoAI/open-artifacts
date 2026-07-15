@@ -4,9 +4,11 @@ import { isAbsolute, relative, resolve } from 'node:path';
 import Ajv2020Import from 'ajv/dist/2020.js';
 import type { AnySchema, ErrorObject, ValidateFunction } from 'ajv';
 import type { Ajv2020 as Ajv2020Constructor } from 'ajv/dist/2020.js';
+import { init as initModuleLexer, parse as parseModule } from 'es-module-lexer';
+import { transformWithOxc } from 'vite';
 
 import type { ArtifactIdentity } from '../runtime/config.js';
-import { ArtifactContractError, ArtifactReferenceError, type CliIssue } from './errors.js';
+import { ArtifactPackageContractError, ArtifactReferenceError, type CliIssue } from './errors.js';
 
 const inputSchemaDraft = 'https://json-schema.org/draft/2020-12/schema';
 const fixedResources = [
@@ -17,7 +19,7 @@ const fixedResources = [
   'README.md',
 ] as const;
 
-const artifactManifestSchema = {
+export const artifactPackageManifestSchema = {
   type: 'object',
   required: ['name', 'version', 'type', 'files', 'exports', 'openArtifacts', 'peerDependencies'],
   properties: {
@@ -72,12 +74,11 @@ interface ArtifactManifest {
 export interface ResolvedArtifactPackage {
   exampleInput: unknown;
   identity: ArtifactIdentity;
-  validateInput: ValidateFunction;
 }
 
 const Ajv2020 = Ajv2020Import as unknown as typeof Ajv2020Constructor;
 const ajv = new Ajv2020({ allErrors: true, strict: true });
-const validateManifest = ajv.compile(artifactManifestSchema);
+const validateManifest = ajv.compile(artifactPackageManifestSchema);
 
 function jsonPath(instancePath: string, missingProperty?: string) {
   const segments = instancePath
@@ -120,15 +121,32 @@ export function formatValidationIssues(
   });
 }
 
-function resolvePackageFile(root: string, packagePath: string) {
+function resolvePackagePath(root: string, packagePath: string) {
   const resolved = resolve(root, packagePath);
   const pathWithinPackage = relative(root, resolved);
   if (pathWithinPackage.startsWith('..') || isAbsolute(pathWithinPackage)) {
-    throw new ArtifactContractError([
+    throw new ArtifactPackageContractError([
       { path: '$.exports', message: `${packagePath} must remain inside the Artifact Package` },
     ]);
   }
   return resolved;
+}
+
+async function resolvePackageFile(root: string, packagePath: string) {
+  const resolvedPath = resolvePackagePath(root, packagePath);
+  const canonicalPath = await realpath(resolvedPath).catch(() => undefined);
+  if (!canonicalPath) return undefined;
+
+  const pathWithinPackage = relative(root, canonicalPath);
+  if (
+    pathWithinPackage.startsWith('..') ||
+    isAbsolute(pathWithinPackage) ||
+    !(await stat(canonicalPath).catch(() => undefined))?.isFile()
+  ) {
+    return undefined;
+  }
+
+  return canonicalPath;
 }
 
 async function readJson(path: string, issuePath: string) {
@@ -137,25 +155,46 @@ async function readJson(path: string, issuePath: string) {
   } catch (error) {
     const message =
       error instanceof SyntaxError ? 'must contain valid JSON' : 'must be a readable file';
-    throw new ArtifactContractError([{ path: issuePath, message }]);
+    throw new ArtifactPackageContractError([{ path: issuePath, message }]);
   }
 }
 
 async function requireFixedResources(root: string) {
   const issues: CliIssue[] = [];
-  await Promise.all(
-    fixedResources.map(async (resource) => {
-      const resourcePath = resolvePackageFile(root, resource);
-      const resourceStat = await stat(resourcePath).catch(() => undefined);
-      if (!resourceStat?.isFile()) {
+  const resources = await Promise.all(
+    fixedResources.map(async (resource): Promise<[string, string | undefined]> => {
+      const canonicalPath = await resolvePackageFile(root, resource);
+      if (!canonicalPath) {
         issues.push({
           path: `$.files[${JSON.stringify(resource)}]`,
-          message: 'must exist as a file',
+          message: 'must exist as a file inside the Artifact Package',
         });
+        return [resource, undefined];
       }
+      return [resource, canonicalPath];
     }),
   );
-  if (issues.length > 0) throw new ArtifactContractError(issues);
+  if (issues.length > 0) throw new ArtifactPackageContractError(issues);
+  return Object.fromEntries(resources) as Record<(typeof fixedResources)[number], string>;
+}
+
+async function validateArtifactSource(entryPath: string) {
+  try {
+    const source = await readFile(entryPath, 'utf8');
+    const transformed = await transformWithOxc(source, entryPath);
+    await initModuleLexer;
+    const [, exports] = parseModule(transformed.code);
+    if (!exports.some((exported) => exported.n === 'default')) {
+      throw new Error('missing default export');
+    }
+  } catch {
+    throw new ArtifactPackageContractError([
+      {
+        path: '$.exports["."]',
+        message: 'must contain valid editable TSX Artifact Source with a default export',
+      },
+    ]);
+  }
 }
 
 export async function resolveLocalArtifactPackage(
@@ -169,7 +208,7 @@ export async function resolveLocalArtifactPackage(
     reference.startsWith('../');
   if (!isExplicitRelative && !isAbsolute(reference)) {
     throw new ArtifactReferenceError(
-      `Issue #3 supports explicit local Artifact References only; received: ${reference}`,
+      `Only explicit local Artifact References are currently supported; received: ${reference}`,
     );
   }
 
@@ -182,21 +221,31 @@ export async function resolveLocalArtifactPackage(
     throw new ArtifactReferenceError(`Artifact Reference is not a directory: ${root}`);
   }
 
-  const manifestValue = await readJson(resolve(root, 'package.json'), '$.packageJson');
+  const manifestPath = await resolvePackageFile(root, 'package.json');
+  if (!manifestPath) {
+    throw new ArtifactPackageContractError([
+      {
+        path: '$.packageJson',
+        message: 'must exist as a file inside the Artifact Package',
+      },
+    ]);
+  }
+  const manifestValue = await readJson(manifestPath, '$.packageJson');
   if (!validateManifest(manifestValue)) {
-    throw new ArtifactContractError(formatValidationIssues(validateManifest.errors));
+    throw new ArtifactPackageContractError(formatValidationIssues(validateManifest.errors));
   }
   const manifest = manifestValue as ArtifactManifest;
-  await requireFixedResources(root);
+  const resources = await requireFixedResources(root);
+  await validateArtifactSource(resources['src/index.tsx']);
 
-  const schema = await readJson(resolve(root, 'input.schema.json'), '$.inputContract');
+  const schema = await readJson(resources['input.schema.json'], '$.inputContract');
   if (
     !schema ||
     typeof schema !== 'object' ||
     !('$schema' in schema) ||
     schema.$schema !== inputSchemaDraft
   ) {
-    throw new ArtifactContractError([
+    throw new ArtifactPackageContractError([
       { path: '$.inputContract.$schema', message: `must equal ${inputSchemaDraft}` },
     ]);
   }
@@ -205,7 +254,7 @@ export async function resolveLocalArtifactPackage(
   try {
     validateInput = ajv.compile(schema as AnySchema);
   } catch (error) {
-    throw new ArtifactContractError([
+    throw new ArtifactPackageContractError([
       {
         path: '$.inputContract',
         message: error instanceof Error ? error.message : 'must be a valid JSON Schema',
@@ -213,19 +262,20 @@ export async function resolveLocalArtifactPackage(
     ]);
   }
 
-  const exampleInput = await readJson(resolve(root, 'example.json'), '$.example');
+  const exampleInput = await readJson(resources['example.json'], '$.example');
   if (!validateInput(exampleInput)) {
-    throw new ArtifactContractError(formatValidationIssues(validateInput.errors, '$.example'));
+    throw new ArtifactPackageContractError(
+      formatValidationIssues(validateInput.errors, '$.example'),
+    );
   }
 
   return {
     exampleInput,
     identity: {
-      entryPath: resolvePackageFile(root, './src/index.tsx'),
+      entryPath: resources['src/index.tsx'],
       name: manifest.name,
       root,
       version: manifest.version,
     },
-    validateInput,
   };
 }

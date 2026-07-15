@@ -6,24 +6,24 @@
   "files": 6,
   "coverage": {
     "statements": {
-      "covered": 228,
-      "pct": 42.54,
-      "total": 536
+      "covered": 254,
+      "pct": 43.57,
+      "total": 583
     },
     "branches": {
-      "covered": 38,
-      "pct": 64.41,
-      "total": 59
+      "covered": 42,
+      "pct": 61.76,
+      "total": 68
     },
     "functions": {
-      "covered": 14,
-      "pct": 63.64,
-      "total": 22
+      "covered": 16,
+      "pct": 66.67,
+      "total": 24
     },
     "lines": {
-      "covered": 228,
-      "pct": 42.54,
-      "total": 536
+      "covered": 254,
+      "pct": 43.57,
+      "total": 583
     }
   }
 }

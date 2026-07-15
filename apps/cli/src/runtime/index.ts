@@ -132,7 +132,7 @@ async function startRuntime(config: SessionRuntimeConfig) {
 
   await server.listen();
   const address = server.httpServer?.address() as AddressInfo | null;
-  if (!address) throw new Error('Artifact Session Runtime did not bind an HTTP port');
+  if (!address) throw new Error('local runtime did not bind an HTTP port');
 
   await writeFile(
     config.readyFile,
@@ -141,7 +141,7 @@ async function startRuntime(config: SessionRuntimeConfig) {
 }
 
 const configPath = process.argv[2];
-if (!configPath) throw new Error('Artifact Session Runtime requires a config path');
+if (!configPath) throw new Error('local runtime requires a config path');
 
 const config = JSON.parse(await readFile(configPath, 'utf8')) as SessionRuntimeConfig;
 await startRuntime(config);

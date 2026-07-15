@@ -1,29 +1,11 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 
-const repositoryRoot = resolve(import.meta.dirname, '..');
-const cliEntry = resolve(repositoryRoot, 'apps/cli/dist/cli/index.js');
-
-function buildCli() {
-  const result = spawnSync('npm', ['run', 'build', '--workspace', '@open-artifacts/cli'], {
-    cwd: repositoryRoot,
-    encoding: 'utf8',
-  });
-  assert.equal(result.status, 0, result.stderr || result.stdout);
-}
-
-function runCli(arguments_, home) {
-  return spawnSync(process.execPath, [cliEntry, ...arguments_], {
-    cwd: repositoryRoot,
-    encoding: 'utf8',
-    env: { ...process.env, HOME: home },
-    timeout: 10_000,
-  });
-}
+import { buildCli, runBuiltCli } from './helpers/cli.mjs';
 
 async function createArtifactPackage(home, overrides = {}) {
   const root = join(home, overrides.directory ?? 'artifact');
@@ -72,7 +54,10 @@ async function createArtifactPackage(home, overrides = {}) {
         'export default function ContractFixture({ data }) { return <h1>{data.message}</h1>; }\n',
     ),
     writeFile(join(root, 'tsconfig.json'), '{}\n'),
-    writeFile(join(root, 'README.md'), '# Contract fixture\n'),
+    writeFile(
+      join(root, 'README.md'),
+      '# Contract fixture\n\nRenders Artifact Input shaped as `{ message: string }` with React. React is provided as a peer dependency. Copy the directory to create a Local Fork.\n',
+    ),
   ]);
 
   return root;
@@ -85,7 +70,7 @@ async function sessionDirectories(home) {
   });
 }
 
-function assertNoRuntimeProcessForHome(home) {
+function assertNoSessionProcessForHome(home) {
   const processes = spawnSync('/bin/ps', ['-axo', 'command='], { encoding: 'utf8' });
   assert.equal(processes.status, 0, processes.stderr);
   assert.doesNotMatch(processes.stdout, new RegExp(home.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&')));
@@ -99,16 +84,18 @@ function parseJsonError(result) {
 
 test.before(buildCli);
 
-test('oa run reports stable Artifact Contract errors before process creation', async (t) => {
+test('oa run reports stable Artifact Package contract errors before process creation', async (t) => {
   const home = await mkdtemp(join(tmpdir(), 'open-artifacts-contract-'));
   t.after(() => rm(home, { force: true, recursive: true }));
   const artifactRoot = await createArtifactPackage(home, {
     manifest: { exports: { '.': './dist/index.js' } },
   });
 
-  const error = parseJsonError(runCli(['run', artifactRoot, '--json', '--no-open'], home));
+  const error = parseJsonError(
+    runBuiltCli(['run', artifactRoot, '--json', '--no-open'], { home, timeout: 10_000 }),
+  );
 
-  assert.equal(error.error.code, 'ARTIFACT_CONTRACT_INVALID');
+  assert.equal(error.error.code, 'ARTIFACT_PACKAGE_CONTRACT_INVALID');
   assert.equal(error.error.kind, 'contract');
   assert.match(error.error.message, /does not satisfy react-render\/v0/);
   assert.ok(
@@ -118,10 +105,13 @@ test('oa run reports stable Artifact Contract errors before process creation', a
   );
   assert.deepEqual(await sessionDirectories(home), []);
 
-  const humanResult = runCli(['run', artifactRoot, '--no-open'], home);
+  const humanResult = runBuiltCli(['run', artifactRoot, '--no-open'], {
+    home,
+    timeout: 10_000,
+  });
   assert.equal(humanResult.status, 1);
   assert.equal(humanResult.stdout, '');
-  assert.match(humanResult.stderr, /^oa: Artifact Contract error:/);
+  assert.match(humanResult.stderr, /^oa: Artifact Package contract error:/);
   assert.doesNotMatch(humanResult.stderr, /file:\/\/|\n\s+at /);
 });
 
@@ -143,6 +133,19 @@ test('oa run rejects each required Artifact Package Contract boundary', async (t
       expectedPath: '$.openArtifacts.format',
     },
     {
+      name: 'manifest symlink escaping the Package',
+      arrange: async (home) => {
+        const root = await createArtifactPackage(home);
+        const manifestPath = join(root, 'package.json');
+        const externalManifest = join(home, 'external-package.json');
+        await writeFile(externalManifest, await readFile(manifestPath, 'utf8'));
+        await rm(manifestPath);
+        await symlink(externalManifest, manifestPath);
+        return root;
+      },
+      expectedPath: '$.packageJson',
+    },
+    {
       name: 'missing canonical exports',
       arrange: (home) => createArtifactPackage(home, { manifest: { exports: {} } }),
       expectedPath: '$.exports["."]',
@@ -155,6 +158,26 @@ test('oa run rejects each required Artifact Package Contract boundary', async (t
         return root;
       },
       expectedPath: '$.files["src/index.tsx"]',
+    },
+    {
+      name: 'source symlink escaping the Package',
+      arrange: async (home) => {
+        const root = await createArtifactPackage(home);
+        const externalSource = join(home, 'external.tsx');
+        await writeFile(externalSource, 'export default function External() { return null; }\n');
+        await rm(join(root, 'src/index.tsx'));
+        await symlink(externalSource, join(root, 'src/index.tsx'));
+        return root;
+      },
+      expectedPath: '$.files["src/index.tsx"]',
+    },
+    {
+      name: 'source without a default export',
+      arrange: (home) =>
+        createArtifactPackage(home, {
+          source: 'export function NamedRender() { return <main />; }\n',
+        }),
+      expectedPath: '$.exports["."]',
     },
     {
       name: 'wrong JSON Schema draft',
@@ -178,12 +201,17 @@ test('oa run rejects each required Artifact Package Contract boundary', async (t
       subtest.after(() => rm(home, { force: true, recursive: true }));
       const artifactRoot = await contractCase.arrange(home);
 
-      const error = parseJsonError(runCli(['run', artifactRoot, '--json', '--no-open'], home));
+      const error = parseJsonError(
+        runBuiltCli(['run', artifactRoot, '--json', '--no-open'], {
+          home,
+          timeout: 10_000,
+        }),
+      );
 
-      assert.equal(error.error.code, 'ARTIFACT_CONTRACT_INVALID');
+      assert.equal(error.error.code, 'ARTIFACT_PACKAGE_CONTRACT_INVALID');
       assert.ok(error.error.issues.some((issue) => issue.path === contractCase.expectedPath));
       assert.deepEqual(await sessionDirectories(home), []);
-      assertNoRuntimeProcessForHome(home);
+      assertNoSessionProcessForHome(home);
     });
   }
 });
@@ -193,9 +221,11 @@ test('oa run validates Example Input against the Input Contract before process c
   t.after(() => rm(home, { force: true, recursive: true }));
   const artifactRoot = await createArtifactPackage(home, { example: {} });
 
-  const error = parseJsonError(runCli(['run', artifactRoot, '--json', '--no-open'], home));
+  const error = parseJsonError(
+    runBuiltCli(['run', artifactRoot, '--json', '--no-open'], { home, timeout: 10_000 }),
+  );
 
-  assert.equal(error.error.code, 'ARTIFACT_CONTRACT_INVALID');
+  assert.equal(error.error.code, 'ARTIFACT_PACKAGE_CONTRACT_INVALID');
   assert.ok(
     error.error.issues.some(
       (issue) => issue.path === '$.example.message' && issue.message.includes('required'),
@@ -204,25 +234,37 @@ test('oa run validates Example Input against the Input Contract before process c
   assert.deepEqual(await sessionDirectories(home), []);
 });
 
-test('oa run distinguishes Runtime startup failure and removes the incomplete Session', async (t) => {
-  const home = await mkdtemp(join(tmpdir(), 'open-artifacts-runtime-failure-'));
+test('oa run reports startup failure and removes the incomplete Artifact Session', async (t) => {
+  const home = await mkdtemp(join(tmpdir(), 'open-artifacts-session-failure-'));
   t.after(() => rm(home, { force: true, recursive: true }));
   const artifactRoot = await createArtifactPackage(home, {
     source: `import Missing from './missing.tsx';\nexport default Missing;\n`,
   });
 
-  const error = parseJsonError(runCli(['run', artifactRoot, '--json', '--no-open'], home));
+  const error = parseJsonError(
+    runBuiltCli(['run', artifactRoot, '--json', '--no-open'], { home, timeout: 10_000 }),
+  );
 
-  assert.equal(error.error.code, 'ARTIFACT_RUNTIME_START_FAILED');
-  assert.equal(error.error.kind, 'runtime');
+  assert.equal(error.error.code, 'ARTIFACT_SESSION_START_FAILED');
+  assert.equal(error.error.kind, 'session');
   assert.match(error.error.message, /failed to start/);
   assert.deepEqual(await sessionDirectories(home), []);
-  assertNoRuntimeProcessForHome(home);
+  assertNoSessionProcessForHome(home);
+
+  const humanResult = runBuiltCli(['run', artifactRoot, '--no-open'], {
+    home,
+    timeout: 10_000,
+  });
+  assert.equal(humanResult.status, 1);
+  assert.equal(humanResult.stdout, '');
+  assert.match(humanResult.stderr, /^oa: Artifact Session error:/);
+  assert.doesNotMatch(humanResult.stderr, /file:\/\/|\n\s+at /);
+  assertNoSessionProcessForHome(home);
 });
 
 test('oa help states the trusted-source execution boundary', () => {
   const home = resolve(tmpdir(), 'open-artifacts-help-home');
-  const result = runCli(['run', '--help'], home);
+  const result = runBuiltCli(['run', '--help'], { home, timeout: 10_000 });
 
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /trusted Artifact Source/i);

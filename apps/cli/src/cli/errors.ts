@@ -3,7 +3,7 @@ export interface CliIssue {
   path: string;
 }
 
-type CliErrorKind = 'contract' | 'reference' | 'runtime';
+type CliErrorKind = 'contract' | 'reference' | 'session';
 
 export class CliError extends Error {
   constructor(
@@ -17,10 +17,10 @@ export class CliError extends Error {
   }
 }
 
-export class ArtifactContractError extends CliError {
+export class ArtifactPackageContractError extends CliError {
   constructor(issues: CliIssue[]) {
     super(
-      'ARTIFACT_CONTRACT_INVALID',
+      'ARTIFACT_PACKAGE_CONTRACT_INVALID',
       'contract',
       'Artifact Package does not satisfy react-render/v0',
       [...issues].sort((left, right) => {
@@ -38,9 +38,9 @@ export class ArtifactReferenceError extends CliError {
   }
 }
 
-export class ArtifactRuntimeStartError extends CliError {
+export class ArtifactSessionStartError extends CliError {
   constructor() {
-    super('ARTIFACT_RUNTIME_START_FAILED', 'runtime', 'Artifact Session Runtime failed to start');
+    super('ARTIFACT_SESSION_START_FAILED', 'session', 'Artifact Session failed to start');
   }
 }
 
@@ -48,7 +48,7 @@ function normalizeError(error: unknown) {
   if (error instanceof CliError) return error;
   return new CliError(
     'OA_INTERNAL_ERROR',
-    'runtime',
+    'session',
     'Open Artifacts encountered an unexpected error',
   );
 }
@@ -72,10 +72,10 @@ export function writeCliError(error: unknown, json: boolean) {
 
   const heading =
     cliError.kind === 'contract'
-      ? 'Artifact Contract error'
+      ? 'Artifact Package contract error'
       : cliError.kind === 'reference'
         ? 'Artifact Reference error'
-        : 'Artifact Runtime error';
+        : 'Artifact Session error';
   const issues =
     cliError.issues?.map((issue) => `\n  - ${issue.path}: ${issue.message}`).join('') ?? '';
   process.stderr.write(`oa: ${heading}: ${cliError.message}${issues}\n`);

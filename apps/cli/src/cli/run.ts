@@ -12,7 +12,7 @@ import type {
   SessionRuntimeConfig,
 } from '../runtime/config.js';
 import { resolveLocalArtifactPackage } from './artifact-package.js';
-import { ArtifactRuntimeStartError } from './errors.js';
+import { ArtifactSessionStartError } from './errors.js';
 
 interface RunOptions {
   json: boolean;
@@ -44,14 +44,14 @@ export async function waitForRuntime(
 
   while (Date.now() < deadline) {
     if (!isProcessRunning(childPid)) {
-      throw new Error('Artifact Session Runtime exited before readiness');
+      throw new Error('local runtime exited before Artifact Session readiness');
     }
     const ready = await readFile(readyFile, 'utf8')
       .then((value) => JSON.parse(value) as RuntimeReadyState)
       .catch(() => undefined);
 
     if (ready) {
-      if (ready.pid !== childPid) throw new Error('Artifact Session Runtime identity mismatch');
+      if (ready.pid !== childPid) throw new Error('local runtime process identity mismatch');
       const [pageResponse, preflightResponse] = await Promise.all([
         fetch(ready.url).catch(() => undefined),
         fetch(`${ready.url}__oa/preflight`).catch(() => undefined),
@@ -65,7 +65,7 @@ export async function waitForRuntime(
     await new Promise((resolveDelay) => setTimeout(resolveDelay, 50));
   }
 
-  throw new Error('Artifact Session Runtime did not become ready within 20 seconds');
+  throw new Error('Artifact Session did not become ready within 20 seconds');
 }
 
 function waitForChildExit(child: ChildProcess, timeout: number) {
@@ -129,7 +129,7 @@ export async function runArtifactPackage(reference: string, options: RunOptions)
     });
     await log.close();
     const childPid = child.pid;
-    if (!childPid) throw new Error('Artifact Session Runtime process did not start');
+    if (!childPid) throw new Error('local runtime process did not start');
 
     const ready = await Promise.race([
       waitForRuntime(readyFile, childPid),
@@ -167,6 +167,6 @@ export async function runArtifactPackage(reference: string, options: RunOptions)
   } catch {
     if (child) await terminateFailedRuntime(child);
     await rm(sessionDirectory, { force: true, recursive: true });
-    throw new ArtifactRuntimeStartError();
+    throw new ArtifactSessionStartError();
   }
 }

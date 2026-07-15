@@ -2,34 +2,11 @@ import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { spawnSync } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
 import { URL } from 'node:url';
 import test from 'node:test';
 
-const repositoryRoot = resolve(import.meta.dirname, '..');
-const cliEntry = resolve(repositoryRoot, 'apps/cli/dist/cli/index.js');
-
-function buildCli() {
-  const result = spawnSync('npm', ['run', 'build', '--workspace', '@open-artifacts/cli'], {
-    cwd: repositoryRoot,
-    encoding: 'utf8',
-  });
-
-  assert.equal(result.status, 0, result.stderr || result.stdout);
-}
-
-function runCli(arguments_, options = {}) {
-  return spawnSync(process.execPath, [cliEntry, ...arguments_], {
-    cwd: options.cwd ?? repositoryRoot,
-    encoding: 'utf8',
-    env: {
-      ...process.env,
-      HOME: options.home ?? process.env.HOME,
-    },
-    timeout: 30_000,
-  });
-}
+import { buildCli, repositoryRoot, runBuiltCli as runCli } from './helpers/cli.mjs';
 
 async function stopSession(home, sessionId) {
   const sessionDirectory = join(home, '.open-artifacts', 'sessions', sessionId);
@@ -172,12 +149,15 @@ test('an active local Session reads Artifact source edits in place', async (t) =
         type: 'object',
       })}\n`,
     ),
-    writeFile(join(artifactRoot, 'README.md'), '# Editable fixture\n'),
+    writeFile(
+      join(artifactRoot, 'README.md'),
+      '# Editable fixture\n\nRenders JSON object Artifact Input; this fixture uses `{}`. React is provided as a peer dependency. Copy the directory to create a Local Fork.\n',
+    ),
     writeFile(join(artifactRoot, 'tsconfig.json'), '{}\n'),
   ]);
   await writeFile(
     sourcePath,
-    `export default function EditableArtifact() { return <h1>source version one</h1>; }\n`,
+    `export default function EditableArtifact({ data }: { data: Record<string, never> }) { void data; return <h1>source version one</h1>; }\n`,
   );
 
   const result = runCli(['run', artifactRoot, '--json', '--no-open'], { home });
@@ -191,7 +171,7 @@ test('an active local Session reads Artifact source edits in place', async (t) =
 
   await writeFile(
     sourcePath,
-    `export default function EditableArtifact() { return <h1>source version two</h1>; }\n`,
+    `export default function EditableArtifact({ data }: { data: Record<string, never> }) { void data; return <h1>source version two</h1>; }\n`,
   );
 
   const secondSource = await waitForSource(sourceUrl.href, 'source version two');
