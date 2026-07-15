@@ -15,9 +15,14 @@ const resolvedVirtualEntryId = `\0${virtualEntryId}`;
 
 function fileSystemRequestPath(requestUrl: string | undefined) {
   try {
-    const pathname = new URL(requestUrl ?? '/', 'http://127.0.0.1').pathname;
+    let pathname = new URL(requestUrl ?? '/', 'http://127.0.0.1').pathname;
+    for (let pass = 0; pass < 2; pass += 1) {
+      const decodedPathname = decodeURIComponent(pathname);
+      if (decodedPathname === pathname) break;
+      pathname = decodedPathname;
+    }
     if (!pathname.startsWith('/@fs/')) return undefined;
-    return decodeURIComponent(pathname.slice('/@fs/'.length));
+    return pathname.slice('/@fs/'.length);
   } catch {
     return undefined;
   }

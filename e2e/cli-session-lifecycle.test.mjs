@@ -219,6 +219,12 @@ test('the Runtime denies Session control files when the Artifact root contains t
   assert.equal(response.status, 403);
   assert.doesNotMatch(await response.text(), new RegExp(secret));
 
+  const encodedResponse = await globalThis.fetch(
+    new globalThis.URL(`/%40fs/${secretPath}?raw&import`, session.url),
+  );
+  assert.equal(encodedResponse.status, 403);
+  assert.doesNotMatch(await encodedResponse.text(), new RegExp(secret));
+
   const controlLink = join(home, 'linked-session-control');
   await symlink(join(home, '.open-artifacts', 'sessions', session.sessionId), controlLink);
   const linkedResponse = await globalThis.fetch(
