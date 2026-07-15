@@ -336,7 +336,7 @@ export async function resolveLocalArtifactPackage(
       },
     ]);
   }
-  if ('$async' in validateInput && validateInput.$async === true) {
+  if ((validateInput as ValidateFunction & { $async?: true }).$async === true) {
     throw new ArtifactPackageContractError([
       {
         path: '$.inputContract.$async',
