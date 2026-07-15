@@ -1,6 +1,7 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
-import { readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import type { AddressInfo } from 'node:net';
+import { resolve } from 'node:path';
 
 import { createServer, normalizePath } from 'vite';
 import type { Plugin } from 'vite';
@@ -100,8 +101,10 @@ createRoot(root).render(createElement(Render, { data }));
 }
 
 async function startRuntime(config: SessionRuntimeConfig, instanceToken: string) {
+  const renderRoot = resolve(config.sessionDirectory, 'render');
+  await mkdir(renderRoot, { recursive: true });
   await writeFile(
-    `${config.sessionDirectory}/index.html`,
+    resolve(renderRoot, 'index.html'),
     `<!doctype html>
 <html lang="en">
   <head>
@@ -140,10 +143,10 @@ async function startRuntime(config: SessionRuntimeConfig, instanceToken: string)
       alias: reactAliases(),
       dedupe: ['react', 'react-dom'],
     },
-    root: config.sessionDirectory,
+    root: renderRoot,
     server: {
       fs: {
-        allow: [config.artifact.root, config.sessionDirectory, reactRuntimeDirectory()],
+        allow: [config.artifact.root, renderRoot, reactRuntimeDirectory()],
       },
       host: '127.0.0.1',
       port: 0,

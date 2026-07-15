@@ -114,6 +114,15 @@ test('run, list, and stop manage concurrent Active Sessions independently', asyn
   assert.equal(unauthorizedShutdown.status, 401);
   assert.equal((await globalThis.fetch(sessions[0].url)).status, 200);
 
+  const sessionRoot = join(home, '.open-artifacts', 'sessions', sessions[0].sessionId);
+  const secret = (await readFile(join(sessionRoot, 'instance.secret'), 'utf8')).trim();
+  const directSecretResponse = await globalThis.fetch(`${sessions[0].url}instance.secret`);
+  assert.doesNotMatch(await directSecretResponse.text(), new RegExp(secret));
+  const fileSystemSecretResponse = await globalThis.fetch(
+    new globalThis.URL(`/@fs/${join(sessionRoot, 'instance.secret')}`, sessions[0].url),
+  );
+  assert.equal(fileSystemSecretResponse.status, 403);
+
   assert.equal(new Set(sessions.map(({ sessionId }) => sessionId)).size, 2);
   assert.equal(new Set(sessions.map(({ url }) => url)).size, 2);
   assert.equal(new Set(records.map(({ pid }) => pid)).size, 2);
