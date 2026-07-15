@@ -3,15 +3,23 @@ import { access, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promi
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import test from 'node:test';
+import { URL } from 'node:url';
 
 import { buildCli, repositoryRoot, runBuiltCliAsync, stopSession } from './helpers/cli.mjs';
 import { createControlledRegistry } from './helpers/npm-registry.mjs';
 
 function runCli(arguments_, options) {
+  const npmCache = join(options.home, '.npm');
+  const npmUserConfig = join(options.home, '.npmrc');
   return runBuiltCliAsync(arguments_, {
     ...options,
     env: {
+      npm_config_cache: npmCache,
+      npm_config_registry: options.registry,
+      npm_config_userconfig: npmUserConfig,
+      NPM_CONFIG_CACHE: npmCache,
       NPM_CONFIG_REGISTRY: options.registry,
+      NPM_CONFIG_USERCONFIG: npmUserConfig,
       OA_DEPENDENCY_SCRIPT_MARKER: options.dependencyScriptMarker,
       OA_SCRIPT_MARKER: options.scriptMarker,
     },
@@ -27,6 +35,24 @@ async function cacheEntries(home) {
       throw error;
     },
   );
+}
+
+async function assertNoCacheTemporaries(home) {
+  const entries = await readdir(join(home, '.open-artifacts', 'cache', 'artifacts'));
+  assert.deepEqual(
+    entries.filter((entry) => /^\.(?:resolve|staging|commit)-/.test(entry)),
+    [],
+  );
+}
+
+async function readTree(root) {
+  const entries = await readdir(root, { withFileTypes: true });
+  return Promise.all(
+    entries.map((entry) => {
+      const path = join(root, entry.name);
+      return entry.isDirectory() ? readTree(path) : readFile(path);
+    }),
+  ).then((contents) => contents.flat(Infinity).join('\n'));
 }
 
 async function sessionEntries(home) {
@@ -160,4 +186,75 @@ test('oa resolves registry specifiers into immutable script-free Artifact cache 
   await stopSession(home, localSession.sessionId);
   sessions.pop();
   assert.deepEqual(await cacheEntries(home), beforeInvalid);
+});
+
+test('oa inherits project npm config without persisting registry credentials', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'open-artifacts-project-npmrc-'));
+  const home = join(root, 'home');
+  const projectRoot = join(root, 'project');
+  const registry = await createControlledRegistry();
+  let sessionId;
+  t.after(async () => {
+    if (sessionId) await stopSession(home, sessionId);
+    await registry.close();
+    await rm(root, { force: true, recursive: true });
+  });
+  await Promise.all([
+    import('node:fs/promises').then(({ mkdir }) => mkdir(home, { recursive: true })),
+    import('node:fs/promises').then(({ mkdir }) => mkdir(projectRoot, { recursive: true })),
+  ]);
+  await Promise.all([
+    writeFile(join(home, '.npmrc'), 'registry=http://127.0.0.1:9/\n'),
+    writeFile(
+      join(projectRoot, '.npmrc'),
+      `registry=${registry.origin}/\n@oa-fixture:registry=${registry.origin}/\n//127.0.0.1:${new URL(registry.origin).port}/:_authToken=fixture-token-secret\n`,
+    ),
+    writeFile(
+      join(projectRoot, 'package.json'),
+      '{"name":"project-npmrc-fixture","private":true,"version":"0.0.0"}\n',
+    ),
+  ]);
+
+  const result = await runBuiltCliAsync(
+    ['run', '@oa-fixture/private-artifact@1.0.0', '--json', '--no-open'],
+    { cwd: projectRoot, home, timeout: 60_000 },
+  );
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const session = JSON.parse(result.stdout);
+  sessionId = session.sessionId;
+  const entries = await cacheEntries(home);
+  assert.equal(entries.length, 1);
+  const cacheEntry = join(home, '.open-artifacts', 'cache', 'artifacts', entries[0]);
+  const persistedMetadata = `${await readFile(
+    join(cacheEntry, 'open-artifacts-provenance.json'),
+    'utf8',
+  )}\n${await readFile(join(cacheEntry, 'package-lock.json'), 'utf8')}`;
+  assert.doesNotMatch(persistedMetadata, /fixture-(?:token|dist)-secret/);
+  assert.doesNotMatch(
+    await readTree(join(home, '.open-artifacts')),
+    /fixture-(?:token|dist)-secret/,
+  );
+  await assert.rejects(access(join(cacheEntry, '.npmrc')), { code: 'ENOENT' });
+  await assertNoCacheTemporaries(home);
+  assert.equal(
+    JSON.parse(await readFile(join(cacheEntry, 'open-artifacts-provenance.json'), 'utf8')).registry,
+    `${registry.origin}/`,
+  );
+
+  await writeFile(
+    join(projectRoot, '.npmrc'),
+    `@missing-scope:registry=http://user:secret@127.0.0.1:${new URL(registry.origin).port}/\n//127.0.0.1:${new URL(registry.origin).port}/:_authToken=fixture-token-secret\n`,
+  );
+  const missing = await runBuiltCliAsync(
+    ['run', '@missing-scope/private-artifact@1.0.0', '--json', '--no-open'],
+    { cwd: projectRoot, home, timeout: 60_000 },
+  );
+  assert.equal(missing.status, 1);
+  assert.equal(JSON.parse(missing.stderr).error.code, 'ARTIFACT_REFERENCE_INVALID');
+  assert.doesNotMatch(missing.stderr, /fixture-token-secret|user:secret/);
+  await assertNoCacheTemporaries(home);
+  assert.doesNotMatch(
+    await readTree(join(home, '.open-artifacts')),
+    /fixture-token-secret|user:secret/,
+  );
 });

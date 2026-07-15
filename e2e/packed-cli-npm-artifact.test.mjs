@@ -8,6 +8,23 @@ import test from 'node:test';
 import { buildCli, repositoryRoot, runProcess, stopSession } from './helpers/cli.mjs';
 import { createControlledRegistry } from './helpers/npm-registry.mjs';
 
+function cliProductionDependencyRoots() {
+  const result = spawnSync(
+    'npm',
+    ['ls', '--workspace', '@open-artifacts/cli', '--all', '--parseable', '--omit=dev'],
+    { cwd: repositoryRoot, encoding: 'utf8' },
+  );
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  return result.stdout
+    .trim()
+    .split('\n')
+    .filter(
+      (packageRoot) =>
+        packageRoot !== repositoryRoot &&
+        !packageRoot.endsWith('/node_modules/@open-artifacts/cli'),
+    );
+}
+
 test.before(buildCli);
 
 test('the packed CLI installs oa with its private runtime and starts an npm Artifact Session', async (t) => {
@@ -15,7 +32,9 @@ test('the packed CLI installs oa with its private runtime and starts an npm Arti
   const home = join(root, 'home');
   const installRoot = join(root, 'install');
   const packRoot = join(root, 'pack');
-  const registry = await createControlledRegistry();
+  const registry = await createControlledRegistry({
+    mirrorPackageRoots: cliProductionDependencyRoots(),
+  });
   let sessionId;
   t.after(async () => {
     if (sessionId) await stopSession(home, sessionId);
@@ -45,12 +64,32 @@ test('the packed CLI installs oa with its private runtime and starts an npm Arti
   assert.ok(filePaths.includes('dist/runtime/config.js'));
   const tarball = join(packRoot, packResult.filename);
 
-  const installed = spawnSync(
+  const npmCache = join(root, 'empty-npm-cache');
+  const installed = await runProcess(
     'npm',
-    ['install', tarball, '--ignore-scripts', '--offline', '--no-audit', '--no-fund'],
-    { cwd: installRoot, encoding: 'utf8' },
+    [
+      'install',
+      tarball,
+      '--ignore-scripts',
+      '--no-audit',
+      '--no-fund',
+      '--registry',
+      `${registry.origin}/`,
+    ],
+    {
+      cwd: installRoot,
+      home,
+      env: {
+        npm_config_cache: npmCache,
+        npm_config_userconfig: join(home, '.npmrc'),
+        NPM_CONFIG_CACHE: npmCache,
+        NPM_CONFIG_USERCONFIG: join(home, '.npmrc'),
+      },
+      timeout: 60_000,
+    },
   );
   assert.equal(installed.status, 0, installed.stderr || installed.stdout);
+  assert.ok(registry.count('/ajv') > 0);
   const oa = join(installRoot, 'node_modules', '.bin', 'oa');
   const result = await runProcess(
     oa,
@@ -59,7 +98,12 @@ test('the packed CLI installs oa with its private runtime and starts an npm Arti
       cwd: installRoot,
       home,
       env: {
+        npm_config_cache: npmCache,
+        npm_config_registry: `${registry.origin}/`,
+        npm_config_userconfig: join(home, '.npmrc'),
+        NPM_CONFIG_CACHE: npmCache,
         NPM_CONFIG_REGISTRY: `${registry.origin}/`,
+        NPM_CONFIG_USERCONFIG: join(home, '.npmrc'),
       },
       timeout: 60_000,
     },

@@ -2,9 +2,53 @@ import { describe, expect, it } from 'vitest';
 
 import {
   artifactCacheKey,
+  npmSubprocessCommand,
   parseNpmArtifactReference,
+  sanitizeRegistryUrl,
   type NpmArtifactProvenance,
 } from '../src/cli/npm-artifact.js';
+
+describe('npm subprocess command', () => {
+  it('passes Windows npm arguments through JSON instead of shell interpolation', () => {
+    const arguments_ = ['install', 'artifact@1.0.0; Remove-Item C:\\important'];
+    const command = npmSubprocessCommand(
+      arguments_,
+      'win32',
+      'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+    );
+
+    expect(command).toEqual({
+      arguments: [
+        '-NoLogo',
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        expect.stringContaining('ConvertFrom-Json'),
+      ],
+      environment: { OA_NPM_ARGUMENTS_JSON: JSON.stringify(arguments_) },
+      executable: 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+    });
+    expect(command.arguments.join(' ')).not.toContain('Remove-Item');
+    expect(npmSubprocessCommand(arguments_, 'darwin')).toEqual({
+      arguments: arguments_,
+      environment: {},
+      executable: 'npm',
+    });
+    expect(npmSubprocessCommand(arguments_, 'linux')).toEqual({
+      arguments: arguments_,
+      environment: {},
+      executable: 'npm',
+    });
+  });
+});
+
+describe('npm registry provenance', () => {
+  it('removes credentials and query tokens from persisted URLs', () => {
+    expect(
+      sanitizeRegistryUrl('https://user:secret@registry.example.test/npm/?token=secret#fragment'),
+    ).toBe('https://registry.example.test/npm/');
+  });
+});
 
 describe('npm Artifact Reference parsing', () => {
   it.each([
