@@ -5,6 +5,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 
 import { describe, expect, it } from 'vitest';
 
+import { isLocalArtifactReference } from '../src/cli/artifact-package.js';
 import {
   absolutizeProjectNpmConfigPaths,
   artifactCacheKey,
@@ -12,6 +13,7 @@ import {
   packageLockGraphDigest,
   packageLockDependencyKey,
   parseNpmArtifactReference,
+  removeProjectNpmWorkspaceSelectors,
   sanitizeRegistryUrl,
   withCacheEntryLock,
   type NpmArtifactProvenance,
@@ -80,6 +82,30 @@ describe('npm registry provenance', () => {
 });
 
 describe('project npm config paths', () => {
+  it('removes top-level workspace selectors while preserving other config', () => {
+    const contents = [
+      '# project config',
+      'workspace=missing',
+      'workspace[]=another',
+      'workspaces=true',
+      'registry=https://registry.example.test/',
+      '[nested]',
+      'workspace=preserved',
+      '',
+    ].join('\n');
+
+    expect(removeProjectNpmWorkspaceSelectors(contents)).toBe(
+      [
+        '# project config',
+        'workspaces=true',
+        'registry=https://registry.example.test/',
+        '[nested]',
+        'workspace=preserved',
+        '',
+      ].join('\n'),
+    );
+  });
+
   it('keeps certificate paths relative to the original project config', () => {
     const configDirectory = join(tmpdir(), 'open-artifacts-project');
     const contents = [
@@ -231,6 +257,22 @@ describe('npm dependency lock graph identity', () => {
 });
 
 describe('npm Artifact Reference parsing', () => {
+  it.each([
+    String.raw`.\artifact`,
+    String.raw`..\artifact`,
+    String.raw`C:\artifacts\video-editor`,
+    String.raw`\\server\artifacts\video-editor`,
+  ])('recognizes Windows local reference %s', (reference) => {
+    expect(isLocalArtifactReference(reference, 'win32')).toBe(true);
+  });
+
+  it.each(['artifact', '@scope/artifact', '@scope/artifact@1.2.3'])(
+    'keeps registry reference %s remote on Windows',
+    (reference) => {
+      expect(isLocalArtifactReference(reference, 'win32')).toBe(false);
+    },
+  );
+
   it.each([
     ['@scope/artifact', '@scope/artifact', 'latest', 'tag'],
     ['@scope/artifact@latest', '@scope/artifact', 'latest', 'tag'],

@@ -136,6 +136,15 @@ test('oa resolves registry specifiers into immutable script-free Artifact cache 
   }
 
   assert.ok(latestEntry);
+  const active = await runCli(
+    ['run', 'oa-registry-artifact@stable', '--json', '--no-open'],
+    environment,
+  );
+  assert.equal(active.status, 0, active.stderr || active.stdout);
+  const activeSession = JSON.parse(active.stdout);
+  sessions.push(activeSession.sessionId);
+  assert.equal((await globalThis.fetch(`${activeSession.url}__oa/preflight`)).status, 200);
+
   const tamperedExample = join(
     home,
     '.open-artifacts',
@@ -154,11 +163,35 @@ test('oa resolves registry specifiers into immutable script-free Artifact cache 
   assert.equal(invalidCacheHit.status, 0, invalidCacheHit.stderr || invalidCacheHit.stdout);
   const repairedSession = JSON.parse(invalidCacheHit.stdout);
   sessions.push(repairedSession.sessionId);
+  assert.notEqual(repairedSession.artifact.root, activeSession.artifact.root);
   assert.deepEqual(JSON.parse(await readFile(tamperedExample, 'utf8')), {
-    message: 'version 1.1.0',
+    message: 'tampered but contract-valid',
   });
+  assert.deepEqual(
+    JSON.parse(await readFile(join(repairedSession.artifact.root, 'example.json'), 'utf8')),
+    {
+      message: 'version 1.1.0',
+    },
+  );
+  await access(activeSession.artifact.root);
+  assert.equal((await globalThis.fetch(`${activeSession.url}__oa/preflight`)).status, 200);
   assert.equal(registry.count('/tarballs/oa-registry-artifact-1.1.0.tgz'), 1);
+
+  const repairedCacheHit = await runCli(
+    ['run', 'oa-registry-artifact@stable', '--json', '--no-open'],
+    environment,
+  );
+  assert.equal(repairedCacheHit.status, 0, repairedCacheHit.stderr || repairedCacheHit.stdout);
+  const reusedSession = JSON.parse(repairedCacheHit.stdout);
+  sessions.push(reusedSession.sessionId);
+  assert.equal(reusedSession.artifact.root, repairedSession.artifact.root);
+  assert.equal(registry.count('/tarballs/oa-registry-artifact-1.1.0.tgz'), 1);
+
+  await stopSession(home, reusedSession.sessionId);
+  sessions.pop();
   await stopSession(home, repairedSession.sessionId);
+  sessions.pop();
+  await stopSession(home, activeSession.sessionId);
   sessions.pop();
   assert.deepEqual(await sessionEntries(home), []);
 
@@ -211,7 +244,7 @@ test('oa inherits project npm config without persisting registry credentials', a
     writeFile(globalConfig, `registry=${registry.origin}/\n`),
     writeFile(
       join(projectRoot, '.npmrc'),
-      `@oa-fixture:registry=${registry.origin}/\nlockfile-version=1\n//127.0.0.1:${new URL(registry.origin).port}/:_authToken=fixture-token-secret\n`,
+      `@oa-fixture:registry=${registry.origin}/\nlockfile-version=1\nworkspaces=true\nworkspace=missing\n//127.0.0.1:${new URL(registry.origin).port}/:_authToken=fixture-token-secret\n`,
     ),
     writeFile(
       join(projectRoot, 'package.json'),

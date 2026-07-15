@@ -18,13 +18,17 @@ import {
 } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import { createRequire } from 'node:module';
-import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { promisify } from 'node:util';
 
 import npa from 'npm-package-arg';
 
-import { resolveLocalArtifactPackage, type ResolvedArtifactPackage } from './artifact-package.js';
+import {
+  isLocalArtifactReference,
+  resolveLocalArtifactPackage,
+  type ResolvedArtifactPackage,
+} from './artifact-package.js';
 import { ArtifactPackageContractError, ArtifactReferenceError } from './errors.js';
 
 const executeFile = promisify(execFile);
@@ -74,6 +78,11 @@ interface PackageLock {
 interface CacheContentManifest {
   algorithm: 'sha256';
   digest: string;
+  schemaVersion: 1;
+}
+
+interface CacheGenerationPointer {
+  generation: string;
   schemaVersion: 1;
 }
 
@@ -333,22 +342,69 @@ export function absolutizeProjectNpmConfigPaths(
   return `${contents}${separator}${[...overrides.values()].join('\n')}\n`;
 }
 
+export function removeProjectNpmWorkspaceSelectors(
+  contents: string,
+  environment: NodeJS.ProcessEnv = process.env,
+) {
+  const parts = contents.split(/(\r\n|\r|\n)/);
+  let section = false;
+
+  for (let index = 0; index < parts.length; index += 2) {
+    const line = parts[index];
+    if (line === undefined || /^\s*[;#]/.test(line)) continue;
+    if (/^\s*\[[^\]]*\]\s*$/.test(line)) {
+      section = true;
+      continue;
+    }
+    if (section) continue;
+
+    const assignment = line.match(/^([^=]+)=/);
+    const rawKey = assignment?.[1];
+    if (rawKey === undefined) continue;
+    const key = decodeNpmConfigValue(rawKey);
+    if (typeof key !== 'string') continue;
+    const effectiveKey = replaceNpmConfigEnvironment(key, environment).toLowerCase();
+    if (effectiveKey === 'workspace' || effectiveKey === 'workspace[]') {
+      parts[index] = '';
+      parts[index + 1] = '';
+    }
+  }
+
+  return parts.join('');
+}
+
 async function copyProjectNpmConfig(root: string, projectConfig: string | undefined) {
   if (!projectConfig) return;
   const contents = await readFile(projectConfig, 'utf8');
+  const isolatedContents = removeProjectNpmWorkspaceSelectors(contents);
   await writeFile(
     join(root, '.npmrc'),
-    absolutizeProjectNpmConfigPaths(contents, dirname(projectConfig)),
+    absolutizeProjectNpmConfigPaths(isolatedContents, dirname(projectConfig)),
   );
 }
 
 async function runNpm(cwd: string, arguments_: string[]) {
   try {
-    const command = npmSubprocessCommand(arguments_);
+    const command = npmSubprocessCommand([
+      ...arguments_,
+      '--workspaces=false',
+      '--include-workspace-root=false',
+    ]);
+    const environment: NodeJS.ProcessEnv = { ...process.env, ...command.environment };
+    for (const key of Object.keys(environment)) {
+      if (
+        key.toLowerCase() === 'npm_config_workspace' ||
+        key.toLowerCase() === 'npm_config_workspace[]' ||
+        key.toLowerCase() === 'npm_config_workspaces' ||
+        key.toLowerCase() === 'npm_config_include_workspace_root'
+      ) {
+        delete environment[key];
+      }
+    }
     return await executeFile(command.executable, command.arguments, {
       cwd,
       encoding: 'utf8',
-      env: { ...process.env, ...command.environment },
+      env: environment,
       maxBuffer: 1024 * 1024,
       timeout: 120_000,
     });
@@ -553,6 +609,58 @@ async function validateCachedPackage(
     ]);
   }
   return artifactPackage;
+}
+
+function cacheGenerationPrefix(cacheKey: string) {
+  return `.${cacheKey}.generation-`;
+}
+
+function cacheGenerationPointerPath(cacheRoot: string, cacheKey: string) {
+  return join(cacheRoot, `.${cacheKey}.current.json`);
+}
+
+async function readCacheGeneration(cacheRoot: string, cacheKey: string) {
+  try {
+    const pointer = JSON.parse(
+      await readFile(cacheGenerationPointerPath(cacheRoot, cacheKey), 'utf8'),
+    ) as CacheGenerationPointer;
+    if (pointer.schemaVersion !== 1 || typeof pointer.generation !== 'string') return undefined;
+    if (pointer.generation !== basename(pointer.generation)) return undefined;
+    if (!pointer.generation.startsWith(cacheGenerationPrefix(cacheKey))) return undefined;
+    const generation = resolve(cacheRoot, pointer.generation);
+    return isPathInside(resolve(cacheRoot), generation) ? generation : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+async function publishCacheGeneration(cacheRoot: string, cacheKey: string, generation: string) {
+  const pointerPath = cacheGenerationPointerPath(cacheRoot, cacheKey);
+  const temporaryPath = `${pointerPath}.${randomUUID()}.tmp`;
+  try {
+    await writeFile(
+      temporaryPath,
+      `${JSON.stringify({ generation: basename(generation), schemaVersion: 1 })}\n`,
+      { flag: 'wx', mode: 0o600 },
+    );
+    await rename(temporaryPath, pointerPath);
+  } finally {
+    await rm(temporaryPath, { force: true });
+  }
+}
+
+async function validateCurrentCacheEntry(
+  cacheRoot: string,
+  cacheKey: string,
+  cacheEntry: string,
+  provenance: NpmArtifactProvenance,
+) {
+  const generation = await readCacheGeneration(cacheRoot, cacheKey);
+  if (generation) {
+    const current = await validateCachedPackage(cacheRoot, generation, provenance);
+    if (current) return current;
+  }
+  return validateCachedPackage(cacheRoot, cacheEntry, provenance);
 }
 
 async function installCacheEntry(
@@ -795,37 +903,48 @@ export async function resolveNpmArtifactPackage(
     const provenance = await resolveProvenance(resolutionRoot, reference);
     const cacheKey = artifactCacheKey(provenance);
     const cacheEntry = join(cacheRoot, cacheKey);
-    const cached = await validateCachedPackage(cacheRoot, cacheEntry, provenance);
+    const cached = await validateCurrentCacheEntry(cacheRoot, cacheKey, cacheEntry, provenance);
     if (cached) return cached;
 
     return await withCacheEntryLock(cacheRoot, cacheKey, async () => {
-      const concurrentlyInstalled = await validateCachedPackage(cacheRoot, cacheEntry, provenance);
+      const concurrentlyInstalled = await validateCurrentCacheEntry(
+        cacheRoot,
+        cacheKey,
+        cacheEntry,
+        provenance,
+      );
       if (concurrentlyInstalled) return concurrentlyInstalled;
 
-      await rm(cacheEntry, { force: true, recursive: true });
-      await installCacheEntry(resolutionRoot, cacheRoot, cacheEntry, provenance, projectConfig);
-      const installed = await validateCachedPackage(cacheRoot, cacheEntry, provenance);
-      if (!installed) {
-        await rm(cacheEntry, { force: true, recursive: true });
-        throw new ArtifactReferenceError(
-          'Installed npm Artifact Package failed cache verification',
+      const canonicalEntryExists = Boolean(await lstat(cacheEntry).catch(() => undefined));
+      const installationEntry = canonicalEntryExists
+        ? join(cacheRoot, `${cacheGenerationPrefix(cacheKey)}${randomUUID()}`)
+        : cacheEntry;
+      try {
+        await installCacheEntry(
+          resolutionRoot,
+          cacheRoot,
+          installationEntry,
+          provenance,
+          projectConfig,
         );
+        const installed = await validateCachedPackage(cacheRoot, installationEntry, provenance);
+        if (!installed) {
+          throw new ArtifactReferenceError(
+            'Installed npm Artifact Package failed cache verification',
+          );
+        }
+        if (installationEntry !== cacheEntry) {
+          await publishCacheGeneration(cacheRoot, cacheKey, installationEntry);
+        }
+        return installed;
+      } catch (error) {
+        await rm(installationEntry, { force: true, recursive: true });
+        throw error;
       }
-      return installed;
     });
   } finally {
     await rm(resolutionRoot, { force: true, recursive: true });
   }
-}
-
-export function isLocalArtifactReference(reference: string) {
-  return (
-    isAbsolute(reference) ||
-    reference === '.' ||
-    reference === '..' ||
-    reference.startsWith('./') ||
-    reference.startsWith('../')
-  );
 }
 
 export function resolveArtifactPackageReference(reference: string, cwd: string) {

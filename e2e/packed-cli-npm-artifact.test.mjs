@@ -59,9 +59,42 @@ test('the packed CLI installs oa with its private runtime and starts an npm Arti
   assert.equal(packed.status, 0, packed.stderr || packed.stdout);
   const packResult = JSON.parse(packed.stdout)[0];
   const filePaths = packResult.files.map(({ path }) => path);
-  assert.ok(filePaths.includes('dist/cli/index.js'));
-  assert.ok(filePaths.includes('dist/runtime/index.js'));
-  assert.ok(filePaths.includes('dist/runtime/config.js'));
+  assert.deepEqual(filePaths, [
+    'dist/cli/artifact-input.d.ts',
+    'dist/cli/artifact-input.d.ts.map',
+    'dist/cli/artifact-input.js',
+    'dist/cli/artifact-package.d.ts',
+    'dist/cli/artifact-package.d.ts.map',
+    'dist/cli/artifact-package.js',
+    'dist/cli/errors.d.ts',
+    'dist/cli/errors.d.ts.map',
+    'dist/cli/errors.js',
+    'dist/cli/index.d.ts',
+    'dist/cli/index.d.ts.map',
+    'dist/cli/index.js',
+    'dist/cli/npm-artifact.d.ts',
+    'dist/cli/npm-artifact.d.ts.map',
+    'dist/cli/npm-artifact.js',
+    'dist/cli/run.d.ts',
+    'dist/cli/run.d.ts.map',
+    'dist/cli/run.js',
+    'dist/cli/session.d.ts',
+    'dist/cli/session.d.ts.map',
+    'dist/cli/session.js',
+    'dist/runtime/artifact-input.d.ts',
+    'dist/runtime/artifact-input.d.ts.map',
+    'dist/runtime/artifact-input.js',
+    'dist/runtime/config.d.ts',
+    'dist/runtime/config.d.ts.map',
+    'dist/runtime/config.js',
+    'dist/runtime/index.d.ts',
+    'dist/runtime/index.d.ts.map',
+    'dist/runtime/index.js',
+    'dist/runtime/react.d.ts',
+    'dist/runtime/react.d.ts.map',
+    'dist/runtime/react.js',
+    'package.json',
+  ]);
   const tarball = join(packRoot, packResult.filename);
 
   const npmCache = join(root, 'empty-npm-cache');

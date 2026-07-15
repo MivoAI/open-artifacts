@@ -1,6 +1,6 @@
 import { mkdtemp, readFile, realpath, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { isAbsolute, relative, resolve } from 'node:path';
+import { isAbsolute, relative, resolve, win32 } from 'node:path';
 
 import Ajv2020Import from 'ajv/dist/2020.js';
 import type { AnySchema, ErrorObject, ValidateFunction } from 'ajv';
@@ -80,6 +80,20 @@ export interface ResolvedArtifactPackage {
   exampleInput: unknown;
   identity: ArtifactIdentity;
   validateInput(input: unknown): CliIssue[];
+}
+
+export function isLocalArtifactReference(
+  reference: string,
+  platform: NodeJS.Platform = process.platform,
+) {
+  return (
+    (platform === 'win32' ? win32.isAbsolute(reference) : isAbsolute(reference)) ||
+    reference === '.' ||
+    reference === '..' ||
+    reference.startsWith('./') ||
+    reference.startsWith('../') ||
+    (platform === 'win32' && (reference.startsWith('.\\') || reference.startsWith('..\\')))
+  );
 }
 
 const Ajv2020 = Ajv2020Import as unknown as typeof Ajv2020Constructor;
@@ -278,12 +292,7 @@ export async function resolveLocalArtifactPackage(
   cwd: string,
   options: { dependencyRoot?: string } = {},
 ): Promise<ResolvedArtifactPackage> {
-  const isExplicitRelative =
-    reference === '.' ||
-    reference === '..' ||
-    reference.startsWith('./') ||
-    reference.startsWith('../');
-  if (!isExplicitRelative && !isAbsolute(reference)) {
+  if (!isLocalArtifactReference(reference)) {
     throw new ArtifactReferenceError(
       `Only explicit local Artifact References are currently supported; received: ${reference}`,
     );
