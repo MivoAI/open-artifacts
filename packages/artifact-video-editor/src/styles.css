@@ -7,9 +7,9 @@
   --ve-line: #26303d;
   --ve-accent: #a8f04b;
   --ve-blue: #46a9ff;
-  width: 100vw;
+  width: 100%;
   min-width: 1080px;
-  height: 100vh;
+  height: 100%;
   min-height: 680px;
   overflow: hidden;
   background: var(--ve-bg);
@@ -133,7 +133,7 @@
 
   .ve-editor-grid {
     display: grid;
-    height: calc(100vh - 58px);
+    height: calc(100% - 58px);
     min-height: 622px;
     grid-template-columns: 340px 270px minmax(470px, 1fr);
   }

@@ -64,6 +64,10 @@ test('oa serves a playable and synchronized Video Editor Artifact', async (t) =>
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   await page.goto(session.url);
 
+  const editorBounds = await page.getByRole('main').boundingBox();
+  assert.equal(editorBounds?.width, 1440);
+  assert.ok((editorBounds?.height ?? 0) >= 900, `editor height=${editorBounds?.height}`);
+
   for (const surface of [
     'project-bar',
     'agent-surface',
