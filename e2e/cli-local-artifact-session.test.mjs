@@ -21,6 +21,12 @@ async function stopSession(home, sessionId) {
   await rm(sessionDirectory, { force: true, recursive: true });
 }
 
+async function sessionRecord(home, sessionId) {
+  return JSON.parse(
+    await readFile(join(home, '.open-artifacts', 'sessions', sessionId, 'record.json'), 'utf8'),
+  );
+}
+
 async function waitForSource(url, expected) {
   const deadline = Date.now() + 5_000;
 
@@ -91,6 +97,7 @@ test('oa run starts local Artifact Packages from relative and absolute reference
     assert.equal(healthResponse.status, 200);
     assert.deepEqual(await healthResponse.json(), {
       artifact: reference.name,
+      instanceId: (await sessionRecord(home, session.sessionId)).instanceId,
       sessionId: session.sessionId,
       status: 'active',
     });

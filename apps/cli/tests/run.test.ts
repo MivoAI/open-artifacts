@@ -176,11 +176,17 @@ describe('Runtime readiness', () => {
     await new Promise<void>((resolveListen) => server.listen(0, '127.0.0.1', resolveListen));
     const address = server.address();
     if (!address || typeof address === 'string') throw new Error('Test server did not bind');
-    const ready = { pid: process.pid, url: `http://127.0.0.1:${address.port}/` };
+    const ready = {
+      instanceId: 'test-instance',
+      pid: process.pid,
+      url: `http://127.0.0.1:${address.port}/`,
+    };
     await writeFile(readyFile, JSON.stringify(ready));
 
     try {
-      await expect(waitForRuntime(readyFile, process.pid)).resolves.toEqual(ready);
+      await expect(waitForRuntime(readyFile, process.pid, ready.instanceId)).resolves.toEqual(
+        ready,
+      );
     } finally {
       await new Promise<void>((resolveClose, rejectClose) =>
         server.close((error) => (error ? rejectClose(error) : resolveClose())),
@@ -192,9 +198,18 @@ describe('Runtime readiness', () => {
     const fixtureRoot = await mkdtemp(join(tmpdir(), 'open-artifacts-ready-mismatch-'));
     temporaryDirectories.push(fixtureRoot);
     const readyFile = join(fixtureRoot, 'ready.json');
-    await writeFile(readyFile, JSON.stringify({ pid: process.pid + 1, url: 'http://127.0.0.1/' }));
+    await writeFile(
+      readyFile,
+      JSON.stringify({
+        instanceId: 'test-instance',
+        pid: process.pid + 1,
+        url: 'http://127.0.0.1/',
+      }),
+    );
 
-    await expect(waitForRuntime(readyFile, process.pid)).rejects.toThrow(/identity mismatch/);
+    await expect(waitForRuntime(readyFile, process.pid, 'test-instance')).rejects.toThrow(
+      /identity mismatch/,
+    );
   });
 
   it('rejects a Runtime whose Render entry fails preflight', async () => {
@@ -210,11 +225,15 @@ describe('Runtime readiness', () => {
     if (!address || typeof address === 'string') throw new Error('Test server did not bind');
     await writeFile(
       readyFile,
-      JSON.stringify({ pid: process.pid, url: `http://127.0.0.1:${address.port}/` }),
+      JSON.stringify({
+        instanceId: 'test-instance',
+        pid: process.pid,
+        url: `http://127.0.0.1:${address.port}/`,
+      }),
     );
 
     try {
-      await expect(waitForRuntime(readyFile, process.pid)).rejects.toThrow(
+      await expect(waitForRuntime(readyFile, process.pid, 'test-instance')).rejects.toThrow(
         /Artifact Render preflight failed: Render import failed/,
       );
     } finally {

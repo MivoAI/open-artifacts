@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { readFile, rm, writeFile } from 'node:fs/promises';
 import type { AddressInfo } from 'node:net';
 
@@ -22,6 +23,7 @@ function artifactSessionPlugin(config: SessionRuntimeConfig): Plugin {
         response.end(
           JSON.stringify({
             artifact: config.artifact.name,
+            instanceId: config.instanceId,
             sessionId: config.sessionId,
             status: 'active',
           }),
@@ -124,12 +126,17 @@ async function startRuntime(config: SessionRuntimeConfig) {
 
   await writeFile(
     config.readyFile,
-    `${JSON.stringify({ pid: process.pid, url: `http://127.0.0.1:${address.port}/` })}\n`,
+    `${JSON.stringify({ instanceId: config.instanceId, pid: process.pid, url: `http://127.0.0.1:${address.port}/` })}\n`,
   );
 }
 
 const configPath = process.argv[2];
-if (!configPath) throw new Error('local runtime requires a config path');
+if (!configPath) throw new Error('Artifact Session Runtime requires a config path');
+const instanceToken = process.argv[3];
+if (!instanceToken) throw new Error('Artifact Session Runtime requires an instance token');
 
 const config = JSON.parse(await readFile(configPath, 'utf8')) as SessionRuntimeConfig;
+if (createHash('sha256').update(instanceToken).digest('hex') !== config.instanceId) {
+  throw new Error('Artifact Session Runtime instance token mismatch');
+}
 await startRuntime(config);
