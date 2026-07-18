@@ -60,6 +60,12 @@ lint -> test -> e2e
 
 Keep features close to the app that owns them. Extract into `packages/*` only when code is reused or represents a stable boundary.
 
+## Pull Request Merge Policy
+
+- Pull requests targeting `main` may use merge commits or rebase merges.
+- Do not squash merge pull requests.
+- With GitHub CLI, use `gh pr merge <number> --merge` or `gh pr merge <number> --rebase`; never use `--squash`.
+
 ## Agent skills
 
 ### Issue tracker
