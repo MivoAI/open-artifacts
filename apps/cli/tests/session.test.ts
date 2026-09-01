@@ -23,10 +23,12 @@ import {
 const record = {
   artifact: {
     entryPath: '/tmp/artifact/src/index.tsx',
+    format: 'react-render/v0' as const,
     name: '@open-artifacts/example',
     root: '/tmp/artifact',
     version: '1.0.0',
   },
+  bundlePath: '/tmp/example.openartifact',
   instanceId: 'instance-id',
   pid: 123,
   processSignature: {

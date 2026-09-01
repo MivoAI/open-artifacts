@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path';
 import test from 'node:test';
 import { URL } from 'node:url';
 
-import { buildCli, repositoryRoot, runBuiltCli } from './helpers/cli.mjs';
+import { buildCli, repositoryRoot, runBuiltCli, stopSession } from './helpers/cli.mjs';
 
 const artifactRoot = resolve(repositoryRoot, 'packages/artifact-evidence-trace');
 
@@ -13,19 +13,6 @@ async function exampleInput(title) {
   const input = JSON.parse(await readFile(join(artifactRoot, 'example.json'), 'utf8'));
   input.title = title;
   return input;
-}
-
-async function stopSession(home, sessionId) {
-  const sessionDirectory = join(home, '.open-artifacts', 'sessions', sessionId);
-  const record = JSON.parse(await readFile(join(sessionDirectory, 'record.json'), 'utf8'));
-
-  try {
-    process.kill(record.pid, 'SIGTERM');
-  } catch (error) {
-    if (error.code !== 'ESRCH') throw error;
-  }
-
-  await rm(sessionDirectory, { force: true, recursive: true });
 }
 
 async function sessionDirectories(home) {

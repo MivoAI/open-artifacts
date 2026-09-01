@@ -1,0 +1,892 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Open Artifacts Instance Manager 设计原型：创建、查找并管理 Artifact Instance。"
+    />
+    <title>Open Artifacts · Instance Manager</title>
+    <link rel="stylesheet" href="./tokens.css" />
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        min-width: 320px;
+        min-height: 100%;
+        background: var(--oa-background);
+        color: var(--oa-text);
+        font-family: var(--oa-font-body);
+      }
+
+      body {
+        min-width: 320px;
+        min-height: 100vh;
+        margin: 0;
+        background:
+          linear-gradient(rgb(255 255 255 / 42%) 1px, transparent 1px) 0 0 / 24px 24px,
+          linear-gradient(90deg, rgb(255 255 255 / 42%) 1px, transparent 1px) 0 0 / 24px 24px,
+          var(--oa-background);
+      }
+
+      button,
+      input {
+        color: inherit;
+        font: inherit;
+      }
+
+      button {
+        border: 0;
+        cursor: pointer;
+      }
+
+      :focus-visible {
+        outline: 3px solid color-mix(in srgb, var(--oa-focus) 28%, transparent);
+        outline-offset: 2px;
+      }
+
+      .manager-shell {
+        min-height: 100vh;
+      }
+
+      .topbar {
+        position: sticky;
+        z-index: 20;
+        top: 0;
+        display: flex;
+        min-height: var(--oa-command-height);
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--oa-space-4);
+        padding: 0 var(--oa-space-5);
+        border-bottom: 1px solid var(--oa-border);
+        background: rgb(251 252 254 / 90%);
+        backdrop-filter: blur(18px);
+      }
+
+      .brand,
+      .topbar-leading,
+      .page-location,
+      .toolbar,
+      .filter-tabs,
+      .instance-main,
+      .instance-actions,
+      .state-pill,
+      .dialog-actions {
+        display: flex;
+        align-items: center;
+      }
+
+      .topbar-leading {
+        min-width: 0;
+        gap: var(--oa-space-4);
+      }
+
+      .brand {
+        flex: 0 0 auto;
+        gap: var(--oa-space-3);
+      }
+
+      .brand-mark {
+        display: grid;
+        width: 2.25rem;
+        height: 2.25rem;
+        place-items: center;
+        border-radius: 0.7rem;
+        background: var(--oa-graphite);
+        color: var(--oa-white);
+        font-family: var(--oa-font-mono);
+        font-size: var(--oa-text-1);
+        font-weight: 900;
+        letter-spacing: -0.08em;
+      }
+
+      .brand-copy {
+        display: grid;
+        gap: 0.08rem;
+      }
+
+      .brand-copy strong {
+        font-family: var(--oa-font-display);
+        font-size: var(--oa-text-2);
+        letter-spacing: -0.02em;
+      }
+
+      .brand-copy small,
+      .eyebrow,
+      .column-label,
+      .package-name,
+      .activity,
+      .empty-state {
+        font-family: var(--oa-font-mono);
+        font-size: var(--oa-text-0);
+        letter-spacing: var(--oa-tracking-label);
+      }
+
+      .brand-copy small,
+      .page-location,
+      .activity {
+        color: var(--oa-text-faint);
+      }
+
+      .divider {
+        width: 1px;
+        height: 1.75rem;
+        background: var(--oa-border);
+      }
+
+      .page-location {
+        gap: var(--oa-space-2);
+        font-size: var(--oa-text-1);
+        font-weight: 700;
+      }
+
+      .primary-button,
+      .secondary-button,
+      .open-link,
+      .filter-button {
+        min-height: 2.4rem;
+        border-radius: 0.58rem;
+        font-size: var(--oa-text-1);
+        font-weight: 750;
+      }
+
+      .primary-button {
+        padding: 0 var(--oa-space-4);
+        background: var(--oa-graphite);
+        color: var(--oa-white);
+      }
+
+      .primary-button:hover {
+        background: var(--oa-graphite-soft);
+      }
+
+      .secondary-button {
+        padding: 0 var(--oa-space-4);
+        border: 1px solid var(--oa-border);
+        background: var(--oa-surface);
+        color: var(--oa-text-muted);
+      }
+
+      .manager-main {
+        width: min(72rem, calc(100% - 2rem));
+        margin: 0 auto;
+        padding: clamp(2.5rem, 7vw, 5.5rem) 0 var(--oa-space-8);
+      }
+
+      .manager-heading {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(18rem, 28rem);
+        gap: var(--oa-space-8);
+        align-items: end;
+        margin-bottom: var(--oa-space-7);
+      }
+
+      .eyebrow {
+        color: var(--oa-data);
+        text-transform: uppercase;
+      }
+
+      .manager-heading h1 {
+        margin: 0.55rem 0 0;
+        font-family: var(--oa-font-display);
+        font-size: clamp(3rem, 7vw, 6rem);
+        line-height: 0.92;
+        letter-spacing: -0.065em;
+      }
+
+      .manager-heading p {
+        margin: 0;
+        color: var(--oa-text-muted);
+        font-size: var(--oa-text-3);
+        line-height: 1.7;
+      }
+
+      .manager-panel {
+        overflow: hidden;
+        border: 1px solid var(--oa-border);
+        border-radius: var(--oa-radius-4);
+        background: rgb(251 252 254 / 94%);
+        box-shadow: 0 1rem 3rem rgb(17 26 43 / 8%);
+      }
+
+      .toolbar {
+        justify-content: space-between;
+        gap: var(--oa-space-4);
+        padding: var(--oa-space-4);
+        border-bottom: 1px solid var(--oa-border);
+      }
+
+      .search-box {
+        position: relative;
+        width: min(23rem, 100%);
+      }
+
+      .search-box::before {
+        position: absolute;
+        top: 50%;
+        left: 0.9rem;
+        color: var(--oa-text-faint);
+        content: '⌕';
+        transform: translateY(-50%);
+      }
+
+      .search-box input {
+        width: 100%;
+        min-height: 2.55rem;
+        padding: 0 var(--oa-space-3) 0 2.35rem;
+        border: 1px solid var(--oa-border);
+        border-radius: 0.65rem;
+        outline: 0;
+        background: var(--oa-fog);
+        font-size: var(--oa-text-1);
+      }
+
+      .search-box input:focus {
+        border-color: var(--oa-focus);
+        background: var(--oa-surface);
+      }
+
+      .filter-tabs {
+        gap: 0.25rem;
+        padding: 0.22rem;
+        border: 1px solid var(--oa-border);
+        border-radius: 0.7rem;
+        background: var(--oa-fog);
+      }
+
+      .filter-button {
+        min-height: 2.1rem;
+        padding: 0 0.75rem;
+        background: transparent;
+        color: var(--oa-text-muted);
+      }
+
+      .filter-button[aria-pressed='true'] {
+        background: var(--oa-surface);
+        color: var(--oa-text);
+        box-shadow: 0 1px 5px rgb(17 26 43 / 10%);
+      }
+
+      .instance-table {
+        display: grid;
+      }
+
+      .table-header,
+      .instance-row {
+        display: grid;
+        grid-template-columns: minmax(18rem, 1.5fr) minmax(10rem, 0.8fr) 8rem 9rem auto;
+        gap: var(--oa-space-4);
+        align-items: center;
+      }
+
+      .table-header {
+        min-height: 2.8rem;
+        padding: 0 var(--oa-space-5);
+        border-bottom: 1px solid var(--oa-border);
+        background: var(--oa-fog);
+      }
+
+      .column-label {
+        color: var(--oa-text-faint);
+        text-transform: uppercase;
+      }
+
+      .instance-row {
+        position: relative;
+        min-height: 5.6rem;
+        padding: var(--oa-space-3) var(--oa-space-5);
+        border-bottom: 1px solid var(--oa-border);
+        transition: background var(--oa-duration-fast) var(--oa-ease);
+      }
+
+      .instance-row:last-child {
+        border-bottom: 0;
+      }
+
+      .instance-row::before {
+        position: absolute;
+        top: 1rem;
+        bottom: 1rem;
+        left: 0;
+        width: 4px;
+        border-radius: 0 999px 999px 0;
+        background: var(--oa-data);
+        content: '';
+      }
+
+      .instance-row[data-state='stopped']::before {
+        background: var(--oa-text-faint);
+      }
+
+      .instance-row[data-state='archived']::before {
+        background: var(--oa-danger);
+      }
+
+      .instance-row:hover {
+        background: var(--oa-surface);
+      }
+
+      .instance-main {
+        min-width: 0;
+        gap: var(--oa-space-3);
+      }
+
+      .instance-avatar {
+        display: grid;
+        flex: 0 0 auto;
+        width: 2.65rem;
+        height: 2.65rem;
+        place-items: center;
+        border-radius: 0.8rem;
+        background: var(--oa-package-soft);
+        color: var(--oa-package);
+        font-family: var(--oa-font-mono);
+        font-size: var(--oa-text-0);
+        font-weight: 900;
+      }
+
+      .instance-copy {
+        display: grid;
+        min-width: 0;
+        gap: 0.25rem;
+      }
+
+      .instance-copy strong {
+        overflow: hidden;
+        font-family: var(--oa-font-display);
+        font-size: var(--oa-text-2);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .instance-copy span {
+        overflow: hidden;
+        color: var(--oa-text-muted);
+        font-size: var(--oa-text-0);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .package-name {
+        overflow: hidden;
+        color: var(--oa-text-muted);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .state-pill {
+        width: fit-content;
+        gap: 0.4rem;
+        padding: 0.36rem 0.56rem;
+        border: 1px solid color-mix(in srgb, var(--oa-data) 25%, var(--oa-border));
+        border-radius: 999px;
+        background: var(--oa-data-soft);
+        color: var(--oa-data);
+        font-family: var(--oa-font-mono);
+        font-size: var(--oa-text-0);
+        font-weight: 750;
+      }
+
+      .state-pill::before {
+        width: 0.42rem;
+        height: 0.42rem;
+        border-radius: 50%;
+        background: currentColor;
+        content: '';
+      }
+
+      .state-pill.stopped {
+        border-color: var(--oa-border);
+        background: var(--oa-fog-deep);
+        color: var(--oa-text-muted);
+      }
+
+      .state-pill.archived {
+        border-color: color-mix(in srgb, var(--oa-danger) 25%, var(--oa-border));
+        background: var(--oa-danger-soft);
+        color: var(--oa-danger);
+      }
+
+      .annotation-count {
+        color: var(--oa-text-muted);
+        font-size: var(--oa-text-1);
+      }
+
+      .annotation-count strong {
+        color: var(--oa-context);
+        font-family: var(--oa-font-mono);
+      }
+
+      .instance-actions {
+        justify-content: flex-end;
+      }
+
+      .open-link {
+        display: inline-grid;
+        min-width: 4.6rem;
+        place-items: center;
+        padding: 0 var(--oa-space-3);
+        border: 1px solid var(--oa-border);
+        background: var(--oa-surface);
+        color: var(--oa-text);
+        text-decoration: none;
+      }
+
+      .open-link:hover {
+        border-color: var(--oa-border-strong);
+        box-shadow: 0 0.35rem 1rem rgb(17 26 43 / 9%);
+      }
+
+      .empty-state {
+        display: none;
+        padding: var(--oa-space-8);
+        color: var(--oa-text-faint);
+        text-align: center;
+      }
+
+      dialog {
+        width: min(31rem, calc(100% - 2rem));
+        padding: 0;
+        border: 1px solid var(--oa-border);
+        border-radius: var(--oa-radius-4);
+        background: var(--oa-surface);
+        box-shadow: var(--oa-shadow-float);
+      }
+
+      dialog::backdrop {
+        background: rgb(17 26 43 / 34%);
+        backdrop-filter: blur(3px);
+      }
+
+      .dialog-content {
+        padding: var(--oa-space-6);
+      }
+
+      .dialog-content h2 {
+        margin: 0;
+        font-family: var(--oa-font-display);
+        font-size: var(--oa-text-4);
+      }
+
+      .dialog-content > p {
+        margin: var(--oa-space-2) 0 var(--oa-space-5);
+        color: var(--oa-text-muted);
+        font-size: var(--oa-text-2);
+        line-height: 1.6;
+      }
+
+      .package-options {
+        display: grid;
+        gap: var(--oa-space-2);
+      }
+
+      .package-option {
+        display: grid;
+        grid-template-columns: 2.5rem minmax(0, 1fr);
+        gap: var(--oa-space-3);
+        align-items: center;
+        padding: var(--oa-space-3);
+        border: 1px solid var(--oa-border);
+        border-radius: var(--oa-radius-2);
+      }
+
+      .package-option:has(input:checked) {
+        border-color: var(--oa-signal);
+        background: var(--oa-signal-soft);
+      }
+
+      .package-option input {
+        width: 1rem;
+        height: 1rem;
+        accent-color: var(--oa-signal);
+      }
+
+      .package-option span {
+        display: grid;
+        gap: 0.2rem;
+      }
+
+      .package-option small {
+        color: var(--oa-text-muted);
+      }
+
+      .dialog-actions {
+        justify-content: flex-end;
+        gap: var(--oa-space-2);
+        margin-top: var(--oa-space-5);
+      }
+
+      .toast {
+        position: fixed;
+        z-index: 100;
+        right: var(--oa-space-5);
+        bottom: var(--oa-space-5);
+        padding: 0.72rem 0.9rem;
+        border-radius: var(--oa-radius-2);
+        background: var(--oa-graphite);
+        color: var(--oa-white);
+        box-shadow: var(--oa-shadow-menu);
+        font-size: var(--oa-text-1);
+        opacity: 0;
+        pointer-events: none;
+        transform: translateY(0.5rem);
+        transition:
+          opacity var(--oa-duration-fast) var(--oa-ease),
+          transform var(--oa-duration-fast) var(--oa-ease);
+      }
+
+      .toast.is-visible {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      @media (max-width: 860px) {
+        .manager-heading {
+          grid-template-columns: 1fr;
+          gap: var(--oa-space-4);
+        }
+
+        .toolbar {
+          align-items: stretch;
+          flex-direction: column;
+        }
+
+        .search-box {
+          width: 100%;
+        }
+
+        .filter-tabs {
+          overflow-x: auto;
+        }
+
+        .table-header {
+          display: none;
+        }
+
+        .instance-table {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .instance-row {
+          grid-template-columns: 1fr auto;
+          gap: var(--oa-space-3);
+          align-content: start;
+          border-right: 1px solid var(--oa-border);
+        }
+
+        .instance-row:nth-child(even) {
+          border-right: 0;
+        }
+
+        .package-name,
+        .activity,
+        .annotation-count {
+          grid-column: 1;
+          padding-left: 3.4rem;
+        }
+
+        .state-pill {
+          grid-column: 1;
+          margin-left: 3.4rem;
+        }
+
+        .instance-actions {
+          grid-column: 2;
+          grid-row: 1;
+        }
+      }
+
+      @media (max-width: 580px) {
+        .topbar {
+          padding: 0 var(--oa-space-3);
+        }
+
+        .brand-copy,
+        .divider {
+          display: none;
+        }
+
+        .page-location {
+          font-size: var(--oa-text-0);
+        }
+
+        .manager-main {
+          width: min(100% - 1rem, 72rem);
+          padding-top: var(--oa-space-7);
+        }
+
+        .manager-heading h1 {
+          font-size: 3.6rem;
+        }
+
+        .manager-panel {
+          border-radius: var(--oa-radius-3);
+        }
+
+        .instance-table {
+          grid-template-columns: 1fr;
+        }
+
+        .instance-row,
+        .instance-row:nth-child(even) {
+          border-right: 0;
+        }
+
+        .filter-button {
+          white-space: nowrap;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          scroll-behavior: auto !important;
+          transition-duration: 0.01ms !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="manager-shell">
+      <header class="topbar">
+        <div class="topbar-leading">
+          <div class="brand" aria-label="Open Artifacts">
+            <span class="brand-mark" aria-hidden="true">OA</span>
+            <span class="brand-copy">
+              <strong>Open Artifacts</strong>
+              <small>Workbench</small>
+            </span>
+          </div>
+          <span class="divider" aria-hidden="true"></span>
+          <span class="page-location">Instance Manager</span>
+        </div>
+        <button class="primary-button" id="newInstance" type="button">New instance</button>
+      </header>
+
+      <main class="manager-main">
+        <header class="manager-heading">
+          <div>
+            <span class="eyebrow">Durable workspaces</span>
+            <h1>Instances</h1>
+          </div>
+          <p>
+            创建、查找和管理持久工作对象。打开一个 Instance 后，才进入它自己的 Artifact UI、 Context
+            与 Annotation。
+          </p>
+        </header>
+
+        <section class="manager-panel" aria-labelledby="instance-list-title">
+          <h2 id="instance-list-title" hidden>Artifact Instances</h2>
+          <div class="toolbar">
+            <label class="search-box">
+              <span hidden>Search instances</span>
+              <input id="instanceSearch" type="search" placeholder="Search by name or Package" />
+            </label>
+            <div class="filter-tabs" aria-label="按生命周期筛选">
+              <button class="filter-button" type="button" aria-pressed="true" data-filter="all">
+                All · 4
+              </button>
+              <button class="filter-button" type="button" aria-pressed="false" data-filter="active">
+                Active · 2
+              </button>
+              <button
+                class="filter-button"
+                type="button"
+                aria-pressed="false"
+                data-filter="stopped"
+              >
+                Stopped · 1
+              </button>
+              <button
+                class="filter-button"
+                type="button"
+                aria-pressed="false"
+                data-filter="archived"
+              >
+                Archived · 1
+              </button>
+            </div>
+          </div>
+
+          <div class="table-header" aria-hidden="true">
+            <span class="column-label">Instance</span>
+            <span class="column-label">Package</span>
+            <span class="column-label">Lifecycle</span>
+            <span class="column-label">Annotations</span>
+            <span></span>
+          </div>
+
+          <div class="instance-table" id="instanceTable">
+            <article
+              class="instance-row"
+              data-state="active"
+              data-search="访谈视频剪辑 chatcut editor"
+            >
+              <div class="instance-main">
+                <span class="instance-avatar">VC</span>
+                <span class="instance-copy">
+                  <strong>访谈视频剪辑</strong>
+                  <span>Edited 4 minutes ago · revision r18</span>
+                </span>
+              </div>
+              <span class="package-name">ChatCut Editor 1.4.0</span>
+              <span class="state-pill">Active</span>
+              <span class="annotation-count"><strong>3</strong> open</span>
+              <span class="instance-actions">
+                <a class="open-link" href="./instance.html?instance=video">Open</a>
+              </span>
+            </article>
+
+            <article
+              class="instance-row"
+              data-state="active"
+              data-search="launch brief markdown editor"
+            >
+              <div class="instance-main">
+                <span class="instance-avatar">MD</span>
+                <span class="instance-copy">
+                  <strong>Launch brief</strong>
+                  <span>Edited 31 minutes ago · revision r7</span>
+                </span>
+              </div>
+              <span class="package-name">Markdown Editor 0.8.1</span>
+              <span class="state-pill">Active</span>
+              <span class="annotation-count"><strong>1</strong> open</span>
+              <span class="instance-actions">
+                <a class="open-link" href="./instance.html?instance=markdown">Open</a>
+              </span>
+            </article>
+
+            <article
+              class="instance-row"
+              data-state="stopped"
+              data-search="weekly metrics data board"
+            >
+              <div class="instance-main">
+                <span class="instance-avatar">DB</span>
+                <span class="instance-copy">
+                  <strong>Weekly metrics</strong>
+                  <span>Stopped today at 09:18 · revision r42</span>
+                </span>
+              </div>
+              <span class="package-name">Data Board 0.9.2</span>
+              <span class="state-pill stopped">Stopped</span>
+              <span class="annotation-count"><strong>0</strong> open</span>
+              <span class="instance-actions">
+                <a class="open-link" href="./instance.html?instance=metrics">Open</a>
+              </span>
+            </article>
+
+            <article
+              class="instance-row"
+              data-state="archived"
+              data-search="spring launch cut chatcut editor"
+            >
+              <div class="instance-main">
+                <span class="instance-avatar">VC</span>
+                <span class="instance-copy">
+                  <strong>Spring launch cut</strong>
+                  <span>Archived 2026-07-18 · revision r31</span>
+                </span>
+              </div>
+              <span class="package-name">ChatCut Editor 1.3.2</span>
+              <span class="state-pill archived">Archived</span>
+              <span class="annotation-count"><strong>0</strong> open</span>
+              <span class="instance-actions">
+                <a class="open-link" href="./instance.html?instance=archive">Open</a>
+              </span>
+            </article>
+          </div>
+
+          <p class="empty-state" id="emptyState">No Instance matches this view.</p>
+        </section>
+      </main>
+    </div>
+
+    <dialog id="createDialog">
+      <form class="dialog-content" method="dialog">
+        <h2>Create an Instance</h2>
+        <p>选择一个 Artifact Package。创建完成后会进入独立的 Instance Workbench。</p>
+        <div class="package-options">
+          <label class="package-option">
+            <input type="radio" name="package" value="chatcut" checked />
+            <span>
+              <strong>ChatCut Editor</strong>
+              <small>Video timeline, Target Providers and 6 Tools</small>
+            </span>
+          </label>
+          <label class="package-option">
+            <input type="radio" name="package" value="markdown" />
+            <span>
+              <strong>Markdown Editor</strong>
+              <small>Local file binding, text selection and 3 Tools</small>
+            </span>
+          </label>
+        </div>
+        <div class="dialog-actions">
+          <button class="secondary-button" value="cancel">Cancel</button>
+          <button class="primary-button" id="createInstance" value="default">
+            Create instance
+          </button>
+        </div>
+      </form>
+    </dialog>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script>
+      const rows = [...document.querySelectorAll('.instance-row')];
+      const filterButtons = [...document.querySelectorAll('[data-filter]')];
+      const searchInput = document.querySelector('#instanceSearch');
+      const emptyState = document.querySelector('#emptyState');
+      const createDialog = document.querySelector('#createDialog');
+      const newInstance = document.querySelector('#newInstance');
+      const createInstance = document.querySelector('#createInstance');
+      const toast = document.querySelector('#toast');
+      let activeFilter = 'all';
+      let toastTimer;
+
+      function applyFilters() {
+        const query = searchInput.value.trim().toLocaleLowerCase();
+        let visible = 0;
+
+        for (const row of rows) {
+          const stateMatches = activeFilter === 'all' || row.dataset.state === activeFilter;
+          const searchMatches = !query || row.dataset.search.includes(query);
+          row.hidden = !(stateMatches && searchMatches);
+          if (!row.hidden) visible += 1;
+        }
+
+        emptyState.style.display = visible ? 'none' : 'block';
+      }
+
+      function showToast(message) {
+        toast.textContent = message;
+        toast.classList.add('is-visible');
+        window.clearTimeout(toastTimer);
+        toastTimer = window.setTimeout(() => toast.classList.remove('is-visible'), 2200);
+      }
+
+      for (const button of filterButtons) {
+        button.addEventListener('click', () => {
+          activeFilter = button.dataset.filter;
+          for (const peer of filterButtons) {
+            peer.setAttribute('aria-pressed', String(peer === button));
+          }
+          applyFilters();
+        });
+      }
+
+      searchInput.addEventListener('input', applyFilters);
+      newInstance.addEventListener('click', () => createDialog.showModal());
+      createInstance.addEventListener('click', () => {
+        window.setTimeout(() => showToast('Prototype: Instance creation submitted.'), 0);
+      });
+    </script>
+  </body>
+</html>

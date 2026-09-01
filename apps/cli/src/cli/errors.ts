@@ -22,7 +22,7 @@ export class ArtifactPackageContractError extends CliError {
     super(
       'ARTIFACT_PACKAGE_CONTRACT_INVALID',
       'contract',
-      'Artifact Package does not satisfy react-render/v0',
+      'Artifact Package does not satisfy a supported Open Artifacts contract',
       [...issues].sort((left, right) => {
         const leftKey = `${left.path}\0${left.message}`;
         const rightKey = `${right.path}\0${right.message}`;

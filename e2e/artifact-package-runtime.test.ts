@@ -13,7 +13,10 @@ describe('Artifact Package runtime seam', () => {
   it('renders each package example through its public source export', () => {
     const decisionData = decisionExample as Parameters<typeof DecisionBoard>[0]['data'];
     const evidenceData = evidenceExample as Parameters<typeof EvidenceTrace>[0]['data'];
-    const videoEditorData = videoEditorExample as Parameters<typeof VideoEditor>[0]['data'];
+    const videoEditorData = videoEditorExample as Extract<
+      Parameters<typeof VideoEditor>[0],
+      { data: unknown }
+    >['data'];
     const decisionMarkup = renderToStaticMarkup(
       createElement(DecisionBoard, { data: decisionData }),
     );
@@ -26,6 +29,6 @@ describe('Artifact Package runtime seam', () => {
 
     expect(decisionMarkup).toContain('Package 本身就是可执行的 React 源码');
     expect(evidenceMarkup).toContain('一条输入如何变成可 fork 的 React 页面');
-    expect(videoEditorMarkup).toContain('Shape a precise opening beat');
+    expect(videoEditorMarkup).toContain('First light assembly');
   });
 });

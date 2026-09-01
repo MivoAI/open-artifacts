@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "module": "packages/runtime",
+  "command": "npm run test",
+  "status": "measured",
+  "files": 12,
+  "coverage": {
+    "statements": {
+      "covered": 1327,
+      "pct": 86,
+      "total": 1543
+    },
+    "branches": {
+      "covered": 260,
+      "pct": 73.65,
+      "total": 353
+    },
+    "functions": {
+      "covered": 115,
+      "pct": 95.83,
+      "total": 120
+    },
+    "lines": {
+      "covered": 1327,
+      "pct": 86,
+      "total": 1543
+    }
+  }
+}

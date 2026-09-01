@@ -1,0 +1,2933 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Open Artifacts Workbench 通用界面原型：Instance、Artifact UI、Selection、Annotation 与执行证据。"
+    />
+    <title>Open Artifacts · Instance Workbench</title>
+    <link rel="stylesheet" href="./tokens.css" />
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        color-scheme: light;
+        background: var(--oa-background);
+        font-family: var(--oa-font-body);
+      }
+
+      body {
+        min-width: 320px;
+        min-height: 100vh;
+        margin: 0;
+        overflow: hidden;
+        background:
+          radial-gradient(circle at 1px 1px, rgb(85 106 139 / 8%) 1px, transparent 0) 0 0 / 24px
+            24px,
+          var(--oa-background);
+        color: var(--oa-text);
+      }
+
+      button,
+      input,
+      textarea {
+        color: inherit;
+        font: inherit;
+      }
+
+      button {
+        border: 0;
+      }
+
+      [hidden] {
+        display: none !important;
+      }
+
+      button,
+      [role='tab'] {
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      :focus-visible {
+        outline: 3px solid color-mix(in srgb, var(--oa-focus) 28%, transparent);
+        outline-offset: 2px;
+      }
+
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+
+      .app-shell {
+        display: grid;
+        min-height: 100vh;
+        grid-template-rows: var(--oa-command-height) minmax(0, 1fr) var(--oa-status-height);
+      }
+
+      .command-bar {
+        position: relative;
+        z-index: 30;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        gap: var(--oa-space-4);
+        min-width: 0;
+        padding: 0 var(--oa-space-4);
+        border-bottom: 1px solid var(--oa-border);
+        background: rgb(251 252 254 / 92%);
+        backdrop-filter: blur(18px);
+      }
+
+      .command-leading,
+      .command-actions,
+      .package-identity,
+      .segmented,
+      .toolbar-group,
+      .meta-row,
+      .target-heading,
+      .composer-actions,
+      .status-group {
+        display: flex;
+        align-items: center;
+      }
+
+      .command-leading {
+        min-width: 0;
+      }
+
+      .rail-label,
+      .section-label,
+      .target-source,
+      .status-strip,
+      .timecode,
+      .track-name,
+      .eyebrow {
+        font-family: var(--oa-font-mono);
+        font-size: var(--oa-text-0);
+        letter-spacing: var(--oa-tracking-label);
+        text-transform: uppercase;
+      }
+
+      .package-identity {
+        min-width: 0;
+        gap: 0.55rem;
+      }
+
+      .package-identity strong {
+        max-width: 22rem;
+        overflow: hidden;
+        font-family: var(--oa-font-display);
+        font-size: var(--oa-text-2);
+        letter-spacing: -0.02em;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .package-version {
+        color: var(--oa-text-faint);
+        font-family: var(--oa-font-mono);
+        font-size: var(--oa-text-0);
+        letter-spacing: 0.02em;
+      }
+
+      .command-actions {
+        justify-content: flex-end;
+        gap: var(--oa-space-2);
+      }
+
+      .segmented {
+        padding: 0.2rem;
+        border: 1px solid var(--oa-border);
+        border-radius: 0.7rem;
+        background: var(--oa-fog);
+      }
+
+      .segmented button,
+      .icon-button,
+      .quiet-button,
+      .primary-button,
+      .tab-button,
+      .view-button,
+      .play-button {
+        min-height: 2.25rem;
+        border-radius: 0.52rem;
+        cursor: pointer;
+      }
+
+      .segmented button {
+        padding: 0 0.72rem;
+        background: transparent;
+        color: var(--oa-text-muted);
+        font-size: var(--oa-text-1);
+        font-weight: 680;
+      }
+
+      .segmented button[aria-pressed='true'] {
+        background: var(--oa-surface);
+        color: var(--oa-text);
+        box-shadow: 0 1px 5px rgb(17 26 43 / 10%);
+      }
+
+      .segmented .inspect-control[aria-pressed='true'] {
+        color: var(--oa-signal);
+      }
+
+      .icon-button,
+      .quiet-button {
+        display: inline-grid;
+        place-items: center;
+        border: 1px solid var(--oa-border);
+        background: var(--oa-surface);
+        color: var(--oa-text-muted);
+      }
+
+      .icon-button {
+        width: 2.35rem;
+        padding: 0;
+        font-family: var(--oa-font-mono);
+        font-size: 1rem;
+      }
+
+      .quiet-button {
+        padding: 0 0.78rem;
+        font-size: var(--oa-text-1);
+        font-weight: 700;
+      }
+
+      .quiet-button[aria-pressed='true'] {
+        border-color: color-mix(in srgb, var(--oa-context) 45%, var(--oa-border));
+        background: var(--oa-context-soft);
+        color: var(--oa-context);
+      }
+
+      .icon-button:hover,
+      .quiet-button:hover {
+        border-color: var(--oa-border-strong);
+        color: var(--oa-text);
+      }
+
+      .workbench-grid {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        min-width: 0;
+        min-height: 0;
+        grid-template-columns: var(--oa-context-width) minmax(32rem, 1fr);
+        overflow: hidden;
+        transition: grid-template-columns var(--oa-duration-medium) var(--oa-ease);
+      }
+
+      .context-hidden .workbench-grid {
+        grid-template-columns: 0 minmax(32rem, 1fr);
+      }
+
+      .context-restore {
+        position: absolute;
+        z-index: 24;
+        top: 50%;
+        left: 0;
+        display: inline-flex;
+        visibility: hidden;
+        min-height: 2.75rem;
+        align-items: center;
+        gap: 0.45rem;
+        padding: 0.55rem 0.8rem 0.55rem 0.58rem;
+        border: 1px solid color-mix(in srgb, var(--oa-context) 32%, var(--oa-border));
+        border-left: 0;
+        border-radius: 0 999px 999px 0;
+        background: rgb(255 255 255 / 96%);
+        box-shadow: var(--oa-shadow-float);
+        opacity: 0;
+        pointer-events: none;
+        color: var(--oa-text);
+        cursor: pointer;
+        font-size: var(--oa-text-1);
+        font-weight: 750;
+        transform: translate(-0.75rem, -50%);
+        transition:
+          opacity var(--oa-duration-fast) var(--oa-ease),
+          transform var(--oa-duration-medium) var(--oa-ease),
+          visibility 0s linear var(--oa-duration-medium);
+      }
+
+      .context-restore::before {
+        width: 0.42rem;
+        height: 0.42rem;
+        border-radius: 50%;
+        background: var(--oa-context);
+        content: '';
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--oa-context) 12%, transparent);
+      }
+
+      .context-restore-arrow {
+        color: var(--oa-context);
+        font-family: var(--oa-font-mono);
+        font-size: 1rem;
+        line-height: 1;
+      }
+
+      .context-hidden .context-restore {
+        visibility: visible;
+        opacity: 1;
+        pointer-events: auto;
+        transform: translate(0, -50%);
+        transition-delay: 80ms, 80ms, 0s;
+      }
+
+      .context-restore:hover {
+        border-color: color-mix(in srgb, var(--oa-context) 58%, var(--oa-border));
+        background: var(--oa-context-soft);
+      }
+
+      .instance-rail,
+      .context-rail,
+      .artifact-stage {
+        min-width: 0;
+        min-height: 0;
+      }
+
+      .instance-rail {
+        position: relative;
+        z-index: 12;
+        display: grid;
+        grid-template-rows: auto auto minmax(0, 1fr) auto;
+        border-right: 1px solid var(--oa-border);
+        background: rgb(251 252 254 / 94%);
+      }
+
+      .rail-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: var(--oa-space-5) var(--oa-space-4) var(--oa-space-3);
+      }
+
+      .rail-heading h2,
+      .context-header h2,
+      .artifact-title h1 {
+        margin: 0;
+        font-family: var(--oa-font-display);
+        letter-spacing: var(--oa-tracking-tight);
+      }
+
+      .rail-heading h2,
+      .context-header h2 {
+        font-size: var(--oa-text-3);
+      }
+
+      .rail-label,
+      .section-label {
+        color: var(--oa-text-faint);
+      }
+
+      .rail-search {
+        margin: 0 var(--oa-space-4) var(--oa-space-3);
+      }
+
+      .rail-search input {
+        width: 100%;
+        height: 2.35rem;
+        padding: 0 var(--oa-space-3);
+        border: 1px solid var(--oa-border);
+        border-radius: var(--oa-radius-2);
+        background: var(--oa-fog);
+        color: var(--oa-text);
+        font-size: var(--oa-text-1);
+      }
+
+      .rail-search input::placeholder {
+        color: var(--oa-text-faint);
+      }
+
+      .instance-list {
+        display: grid;
+        align-content: start;
+        gap: 0.3rem;
+        margin: 0;
+        padding: 0 var(--oa-space-2) var(--oa-space-5);
+        overflow-y: auto;
+        list-style: none;
+      }
+
+      .instance-list li {
+        min-width: 0;
+      }
+
+      .instance-item {
+        position: relative;
+        display: grid;
+        width: 100%;
+        grid-template-columns: 2rem minmax(0, 1fr) auto;
+        gap: var(--oa-space-2);
+        align-items: center;
+        padding: 0.68rem 0.62rem;
+        border-radius: var(--oa-radius-2);
+        background: transparent;
+        text-align: left;
+        cursor: pointer;
+      }
+
+      .instance-item::before {
+        position: absolute;
+        top: 0.62rem;
+        bottom: 0.62rem;
+        left: 0;
+        width: 3px;
+        border-radius: 999px;
+        background: transparent;
+        content: '';
+      }
+
+      .instance-item:hover {
+        background: var(--oa-fog);
+      }
+
+      .instance-item[aria-current='true'] {
+        background: var(--oa-surface);
+        box-shadow: inset 0 0 0 1px var(--oa-border);
+      }
+
+      .instance-item[aria-current='true']::before {
+        background: var(--oa-data);
+      }
+
+      .instance-item.stopped[aria-current='true']::before {
+        background: var(--oa-text-muted);
+      }
+
+      .instance-item.archived[aria-current='true']::before {
+        background: var(--oa-danger);
+      }
+
+      .instance-avatar {
+        display: grid;
+        width: 2rem;
+        height: 2rem;
+        place-items: center;
+        border-radius: 0.65rem;
+        background: var(--oa-package-soft);
+        color: var(--oa-package);
+        font-family: var(--oa-font-mono);
+        font-size: var(--oa-text-0);
+        font-weight: 900;
+      }
+
+      .instance-item.stopped .instance-avatar {
+        background: var(--oa-fog-deep);
+        color: var(--oa-text-muted);
+      }
+
+      .instance-item.archived .instance-avatar {
+        background: var(--oa-danger-soft);
+        color: var(--oa-danger);
+      }
+
+      .instance-copy {
+        display: grid;
+        min-width: 0;
+        gap: 0.2rem;
+      }
+
+      .instance-copy strong,
+      .instance-copy span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .instance-copy strong {
+        font-size: var(--oa-text-1);
+      }
+
+      .instance-copy span {
+        color: var(--oa-text-faint);
+        font-size: var(--oa-text-0);
+      }
+
+      .instance-count {
+        display: grid;
+        min-width: 1.35rem;
+        height: 1.35rem;
+        place-items: center;
+        border-radius: 999px;
+        background: var(--oa-context-soft);
+        color: var(--oa-context);
+        font-family: var(--oa-font-mono);
+        font-size: 0.62rem;
+        font-weight: 850;
+      }
+
+      .instance-section-label {
+        padding: 0.8rem 0.68rem 0.3rem;
+        color: var(--oa-text-faint);
+        font-family: var(--oa-font-mono);
+        font-size: 0.62rem;
+        letter-spacing: var(--oa-tracking-label);
+        text-transform: uppercase;
+      }
+
+      .package-card {
+        margin: var(--oa-space-3);
+        padding: var(--oa-space-3);
+        border: 1px solid var(--oa-border);
+        border-radius: var(--oa-radius-2);
+        background: var(--oa-surface);
+      }
+
+      .package-card .meta-row {
+        justify-content: space-between;
+        gap: var(--oa-space-2);
+        color: var(--oa-text-faint);
+        font-family: var(--oa-font-mono);
+        font-size: 0.62rem;
+      }
+
+      .package-card strong {
+        display: block;
+        margin: 0.45rem 0 0.2rem;
+        font-size: var(--oa-text-1);
+      }
+
+      .package-card p {
+        margin: 0;
+        color: var(--oa-text-muted);
+        font-size: var(--oa-text-0);
+        line-height: 1.5;
+      }
+
+      .artifact-stage {
+        position: relative;
+        z-index: 2;
+        display: grid;
+        grid-column: 2;
+        grid-row: 1;
+        grid-template-rows: auto minmax(0, 1fr);
+        padding: var(--oa-space-3);
+        background: var(--oa-fog);
+      }
+
+      .stage-toolbar {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--oa-space-4);
+        padding: 0.25rem 0.25rem 0.75rem;
+      }
+
+      .artifact-title {
+        display: grid;
+        min-width: 0;
+        gap: 0.18rem;
+      }
+
+      .artifact-title h1 {
+        overflow: hidden;
+        font-size: var(--oa-text-3);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .artifact-title p {
+        margin: 0;
+        color: var(--oa-text-faint);
+        font-family: var(--oa-font-mono);
+        font-size: var(--oa-text-0);
+      }
+
+      .toolbar-group {
+        flex: 0 0 auto;
+        gap: var(--oa-space-2);
+      }
+
+      .view-button {
+        min-width: 2.25rem;
+        padding: 0 0.65rem;
+        border: 1px solid transparent;
+        background: transparent;
+        color: var(--oa-text-muted);
+        font-size: var(--oa-text-1);
+      }
+
+      .view-button:hover {
+        border-color: var(--oa-border);
+        background: var(--oa-surface);
+      }
+
+      .artifact-frame {
+        position: relative;
+        min-width: 0;
+        min-height: 0;
+        overflow: hidden;
+        border: 1px solid var(--oa-border);
+        border-radius: var(--oa-radius-3);
+        background: var(--oa-surface);
+        box-shadow: 0 0.25rem 1rem rgb(17 26 43 / 6%);
+      }
+
+      .ownership-label {
+        position: absolute;
+        z-index: 8;
+        top: 0.62rem;
+        left: 50%;
+        display: flex;
+        align-items: center;
+        gap: 0.42rem;
+        padding: 0.32rem 0.55rem;
+        border: 1px dashed color-mix(in srgb, var(--oa-package) 40%, var(--oa-border));
+        border-radius: 999px;
+        background: rgb(251 252 254 / 88%);
+        color: var(--oa-package);
+        font-family: var(--oa-font-mono);
+        font-size: 0.58rem;
+        letter-spacing: 0.06em;
+        pointer-events: none;
+        transform: translateX(-50%);
+      }
+
+      .ownership-label::before {
+        width: 0.38rem;
+        height: 0.38rem;
+        border-radius: 50%;
+        background: currentColor;
+        content: '';
+      }
+
+      .editor {
+        display: grid;
+        height: 100%;
+        grid-template-rows: minmax(16rem, 1fr) auto;
+        background: #f7f5f1;
+      }
+
+      .package-view {
+        height: 100%;
+      }
+
+      .markdown-view {
+        display: grid;
+        grid-template-columns: 13.5rem minmax(0, 1fr);
+        background: #fff;
+      }
+
+      .document-outline {
+        padding: 1.25rem 1rem;
+        border-right: 1px solid #e1e5eb;
+        background: #f7f9fc;
+      }
+
+      .document-outline h2 {
+        margin: 0 0 1rem;
+        font-size: var(--oa-text-2);
+      }
+
+      .outline-item {
+        display: block;
+        width: 100%;
+        padding: 0.45rem 0.55rem;
+        border-radius: 0.45rem;
+        background: transparent;
+        color: var(--oa-text-muted);
+        font-size: var(--oa-text-1);
+        text-align: left;
+      }
+
+      .outline-item.is-current {
+        background: var(--oa-signal-soft);
+        color: var(--oa-signal);
+        font-weight: 700;
+      }
+
+      .markdown-document {
+        min-width: 0;
+        overflow-y: auto;
+        padding: clamp(2rem, 5vw, 4.5rem);
+        color: #263142;
+        font-family: Georgia, 'Times New Roman', 'Songti SC', serif;
+      }
+
+      .markdown-document h1 {
+        max-width: 38rem;
+        margin: 0 0 0.75rem;
+        color: var(--oa-graphite);
+        font-size: clamp(2rem, 4vw, 3.25rem);
+        line-height: 1.05;
+        letter-spacing: -0.045em;
+      }
+
+      .markdown-document .document-meta {
+        margin: 0 0 2.5rem;
+        color: var(--oa-text-faint);
+        font-family: var(--oa-font-mono);
+        font-size: var(--oa-text-0);
+      }
+
+      .markdown-document h2 {
+        max-width: 38rem;
+        margin: 2rem 0 0.8rem;
+        font-size: 1.25rem;
+      }
+
+      .markdown-document p {
+        max-width: 38rem;
+        margin: 0.65rem 0;
+        font-size: 1rem;
+        line-height: 1.8;
+      }
+
+      .markdown-selection {
+        position: relative;
+        display: block;
+        margin: 0.8rem -0.7rem;
+        padding: 0.65rem 0.7rem;
+        border-radius: 0.4rem;
+        background: transparent;
+        color: inherit;
+        font-family: inherit;
+        font-size: 1rem;
+        line-height: 1.8;
+        text-align: left;
+        cursor: pointer;
+      }
+
+      .markdown-selection:hover {
+        background: var(--oa-fog);
+      }
+
+      .markdown-selection.is-selected {
+        background: var(--oa-context-soft);
+        box-shadow:
+          inset 3px 0 0 var(--oa-context),
+          0 0 0 1px color-mix(in srgb, var(--oa-context) 28%, transparent);
+      }
+
+      .runtime-view {
+        display: grid;
+        place-items: center;
+        padding: var(--oa-space-7);
+        background:
+          radial-gradient(circle at 50% 38%, rgb(37 103 232 / 7%), transparent 35%),
+          var(--oa-surface);
+      }
+
+      .runtime-state-card {
+        width: min(30rem, 100%);
+        padding: var(--oa-space-7);
+        border: 1px solid var(--oa-border);
+        border-radius: var(--oa-radius-4);
+        background: var(--oa-surface);
+        box-shadow: var(--oa-shadow-float);
+        text-align: center;
+      }
+
+      .runtime-state-icon {
+        display: grid;
+        width: 3.25rem;
+        height: 3.25rem;
+        margin: 0 auto var(--oa-space-4);
+        place-items: center;
+        border-radius: 1rem;
+        background: var(--oa-fog-deep);
+        color: var(--oa-text-muted);
+        font-family: var(--oa-font-mono);
+        font-weight: 850;
+      }
+
+      .runtime-view.archived-view .runtime-state-icon {
+        background: var(--oa-danger-soft);
+        color: var(--oa-danger);
+      }
+
+      .runtime-state-card h2 {
+        margin: 0;
+        font-family: var(--oa-font-display);
+        font-size: var(--oa-text-4);
+        letter-spacing: var(--oa-tracking-tight);
+      }
+
+      .runtime-state-card p {
+        margin: var(--oa-space-3) auto var(--oa-space-5);
+        color: var(--oa-text-muted);
+        font-size: var(--oa-text-2);
+        line-height: 1.65;
+      }
+
+      .runtime-state-meta {
+        display: grid;
+        gap: var(--oa-space-2);
+        margin-bottom: var(--oa-space-5);
+        padding: var(--oa-space-3);
+        border-radius: var(--oa-radius-2);
+        background: var(--oa-fog);
+        color: var(--oa-text-muted);
+        font-family: var(--oa-font-mono);
+        font-size: var(--oa-text-0);
+        text-align: left;
+      }
+
+      .editor-top {
+        display: grid;
+        min-height: 0;
+        grid-template-columns: minmax(12rem, 0.36fr) minmax(20rem, 1fr);
+      }
+
+      .asset-library {
+        min-width: 0;
+        padding: 1.15rem;
+        border-right: 1px solid #dedbd3;
+        background: #f4f1eb;
+      }
+
+      .asset-tabs {
+        display: flex;
+        gap: 0.9rem;
+        padding: 0.45rem 0 0.85rem;
+        border-bottom: 1px solid #d8d3ca;
+      }
+
+      .asset-tabs button {
+        padding: 0;
+        background: transparent;
+        color: #8b847a;
+        font-size: 0.68rem;
+        font-weight: 760;
+        cursor: pointer;
+      }
+
+      .asset-tabs button[aria-selected='true'] {
+        color: #2f2d2a;
+      }
+
+      .library-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin: 1rem 0 0.72rem;
+      }
+
+      .library-title strong {
+        font-size: 0.78rem;
+      }
+
+      .library-title span {
+        color: #9b9489;
+        font-family: var(--oa-font-mono);
+        font-size: 0.58rem;
+      }
+
+      .asset-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.55rem;
+      }
+
+      .asset-card {
+        display: grid;
+        min-height: 4.6rem;
+        place-items: center;
+        padding: 0.6rem;
+        border: 1px solid #d8d3ca;
+        border-radius: 0.68rem;
+        background: #fbfaf7;
+        color: #6d665d;
+        font-size: 0.64rem;
+        text-align: center;
+      }
+
+      .asset-lines {
+        display: grid;
+        width: 70%;
+        gap: 0.34rem;
+      }
+
+      .asset-lines i {
+        height: 0.18rem;
+        border-radius: 999px;
+        background: #d67b92;
+      }
+
+      .asset-lines i:last-child {
+        width: 66%;
+        background: #45413c;
+      }
+
+      .preview-panel {
+        position: relative;
+        min-width: 0;
+        min-height: 0;
+        padding: 1.15rem;
+        background: #edeae4;
+      }
+
+      .preview-frame {
+        position: relative;
+        height: 100%;
+        min-height: 12rem;
+        overflow: hidden;
+        border-radius: 0.9rem;
+        background:
+          linear-gradient(115deg, transparent 55%, rgb(255 255 255 / 22%) 55% 57%, transparent 57%),
+          linear-gradient(140deg, #426681 0%, #af845f 48%, #4b3228 100%);
+        box-shadow: inset 0 0 0 1px rgb(255 255 255 / 25%);
+      }
+
+      .window-shape {
+        position: absolute;
+        top: 10%;
+        right: 8%;
+        width: 26%;
+        height: 32%;
+        border: 0.4rem solid rgb(255 255 255 / 24%);
+        background: rgb(169 214 230 / 40%);
+      }
+
+      .subject {
+        position: absolute;
+        right: 20%;
+        bottom: -4%;
+        width: 30%;
+        height: 76%;
+      }
+
+      .subject-head {
+        position: absolute;
+        z-index: 2;
+        top: 0;
+        left: 27%;
+        width: 45%;
+        aspect-ratio: 1;
+        border-radius: 48% 48% 43% 43%;
+        background: #5b3528;
+        box-shadow: inset -0.5rem -0.3rem 0 rgb(31 18 15 / 16%);
+      }
+
+      .subject-body {
+        position: absolute;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        height: 70%;
+        border-radius: 44% 44% 0 0;
+        background:
+          repeating-linear-gradient(
+            90deg,
+            transparent 0 0.75rem,
+            rgb(255 255 255 / 10%) 0.75rem 0.9rem
+          ),
+          #315e84;
+      }
+
+      .preview-caption {
+        position: absolute;
+        right: 1rem;
+        bottom: 1rem;
+        left: 1rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        color: #fff;
+      }
+
+      .preview-caption strong {
+        max-width: 70%;
+        font-size: clamp(0.75rem, 1.2vw, 1rem);
+        text-shadow: 0 2px 12px rgb(0 0 0 / 30%);
+      }
+
+      .timecode {
+        padding: 0.34rem 0.45rem;
+        border-radius: 0.4rem;
+        background: rgb(16 22 31 / 72%);
+        color: #fff;
+        letter-spacing: 0.02em;
+      }
+
+      .inspector-banner {
+        position: absolute;
+        z-index: 12;
+        top: 3.2rem;
+        left: 50%;
+        display: none;
+        align-items: center;
+        gap: 0.45rem;
+        padding: 0.48rem 0.65rem;
+        border: 1px solid color-mix(in srgb, var(--oa-signal) 40%, var(--oa-border));
+        border-radius: 999px;
+        background: rgb(231 240 255 / 94%);
+        color: var(--oa-signal);
+        font-size: var(--oa-text-0);
+        font-weight: 760;
+        box-shadow: var(--oa-shadow-menu);
+        transform: translateX(-50%);
+        white-space: nowrap;
+      }
+
+      .inspect-mode .inspector-banner {
+        display: flex;
+      }
+
+      .editor-timeline {
+        display: grid;
+        grid-template-columns: 5.5rem minmax(38rem, 1fr);
+        min-height: 12.5rem;
+        border-top: 1px solid #d8d3ca;
+        background: #f7f5f1;
+        overflow-x: auto;
+      }
+
+      .track-labels,
+      .tracks {
+        display: grid;
+        grid-template-rows: 2rem repeat(3, 3.35rem);
+      }
+
+      .track-labels {
+        position: sticky;
+        z-index: 4;
+        left: 0;
+        border-right: 1px solid #d8d3ca;
+        background: #f7f5f1;
+      }
+
+      .track-label,
+      .timeline-scale {
+        display: flex;
+        align-items: center;
+        padding: 0 0.72rem;
+        border-bottom: 1px solid #e2ded6;
+      }
+
+      .timeline-scale {
+        justify-content: space-between;
+        color: #9b9489;
+        font-family: var(--oa-font-mono);
+        font-size: 0.56rem;
+      }
+
+      .track-label {
+        gap: 0.5rem;
+        color: #746d64;
+      }
+
+      .track-badge {
+        display: grid;
+        width: 1.55rem;
+        height: 1.35rem;
+        place-items: center;
+        border-radius: 0.35rem;
+        color: white;
+        font-family: var(--oa-font-mono);
+        font-size: 0.55rem;
+        font-weight: 850;
+      }
+
+      .track-badge.graphics {
+        background: #b65a8f;
+      }
+
+      .track-badge.video {
+        background: #4383b6;
+      }
+
+      .track-badge.audio {
+        background: #4d9a67;
+      }
+
+      .track-name {
+        font-size: 0.55rem;
+        letter-spacing: 0.02em;
+      }
+
+      .tracks {
+        position: relative;
+        min-width: 46rem;
+      }
+
+      .track-row {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.32rem 0.4rem;
+        border-bottom: 1px solid #e2ded6;
+      }
+
+      .clip {
+        position: relative;
+        display: flex;
+        min-width: 0;
+        height: 2.55rem;
+        align-items: flex-end;
+        padding: 0.38rem 0.46rem;
+        overflow: hidden;
+        border: 1px solid rgb(43 61 78 / 32%);
+        border-radius: 0.38rem;
+        color: #fff;
+        cursor: pointer;
+        font-size: 0.6rem;
+        font-weight: 760;
+        text-align: left;
+        transition:
+          transform var(--oa-duration-fast) var(--oa-ease),
+          box-shadow var(--oa-duration-fast) var(--oa-ease);
+      }
+
+      .clip:hover {
+        transform: translateY(-1px);
+      }
+
+      .clip.graphics {
+        background: #b65a8f;
+      }
+
+      .clip.video {
+        flex: 1;
+        background:
+          linear-gradient(90deg, rgb(255 255 255 / 8%) 50%, transparent 50%) 0 0 / 0.7rem 100%,
+          #4383b6;
+      }
+
+      .clip.audio {
+        flex: 1;
+        background:
+          repeating-linear-gradient(
+            90deg,
+            transparent 0 0.24rem,
+            rgb(255 255 255 / 20%) 0.24rem 0.3rem
+          ),
+          #4d9a67;
+      }
+
+      .clip.short {
+        flex: 0.62;
+      }
+
+      .clip.long {
+        flex: 1.35;
+      }
+
+      .clip.is-selected {
+        z-index: 5;
+        border-color: var(--oa-context);
+        box-shadow:
+          0 0 0 3px var(--oa-context-soft),
+          0 0 0 5px var(--oa-context);
+      }
+
+      .clip.is-selected::after {
+        position: absolute;
+        top: 0.3rem;
+        right: 0.35rem;
+        width: 0.42rem;
+        height: 0.42rem;
+        border: 2px solid #fff;
+        border-radius: 50%;
+        background: var(--oa-context);
+        content: '';
+      }
+
+      .clip.is-selected[data-selection-order]::after {
+        display: grid;
+        width: 1.08rem;
+        height: 1.08rem;
+        place-items: center;
+        border-width: 1px;
+        background: var(--oa-context);
+        color: #fff;
+        content: attr(data-selection-order);
+        font-family: var(--oa-font-mono);
+        font-size: 0.56rem;
+        font-weight: 850;
+        line-height: 1;
+      }
+
+      .markdown-selection.is-selected[data-selection-order]::after {
+        position: absolute;
+        top: 0.5rem;
+        right: 0.5rem;
+        display: grid;
+        width: 1.2rem;
+        height: 1.2rem;
+        place-items: center;
+        border-radius: 50%;
+        background: var(--oa-context);
+        color: #fff;
+        content: attr(data-selection-order);
+        font-family: var(--oa-font-mono);
+        font-size: 0.58rem;
+        font-weight: 850;
+      }
+
+      .inspect-mode [data-target] {
+        outline: 1px dashed color-mix(in srgb, var(--oa-signal) 72%, transparent);
+        outline-offset: 2px;
+      }
+
+      .playhead {
+        position: absolute;
+        z-index: 7;
+        top: 0;
+        bottom: 0;
+        left: 44%;
+        width: 1px;
+        background: #2d2925;
+        pointer-events: none;
+      }
+
+      .playhead::before {
+        position: absolute;
+        top: 0;
+        left: 50%;
+        width: 0;
+        height: 0;
+        border-top: 0.45rem solid #2d2925;
+        border-right: 0.35rem solid transparent;
+        border-left: 0.35rem solid transparent;
+        content: '';
+        transform: translateX(-50%);
+      }
+
+      .context-rail {
+        position: relative;
+        z-index: 12;
+        display: grid;
+        grid-column: 1;
+        grid-row: 1;
+        grid-template-rows: auto auto minmax(0, 1fr);
+        border-right: 1px solid var(--oa-border);
+        background: rgb(251 252 254 / 97%);
+        transition:
+          opacity var(--oa-duration-medium) var(--oa-ease),
+          transform var(--oa-duration-medium) var(--oa-ease);
+      }
+
+      .context-hidden .context-rail {
+        visibility: hidden;
+        opacity: 0;
+        pointer-events: none;
+        transform: translateX(-1.5rem);
+      }
+
+      .context-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--oa-space-3);
+        padding: var(--oa-space-5) var(--oa-space-5) var(--oa-space-3);
+      }
+
+      .context-tabs {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.28rem;
+        margin: 0 var(--oa-space-5) var(--oa-space-3);
+        padding: 0.22rem;
+        border: 1px solid var(--oa-border);
+        border-radius: 0.7rem;
+        background: var(--oa-fog);
+      }
+
+      .tab-button {
+        background: transparent;
+        color: var(--oa-text-muted);
+        font-size: var(--oa-text-1);
+        font-weight: 700;
+      }
+
+      .tab-button[aria-selected='true'] {
+        background: var(--oa-surface);
+        color: var(--oa-text);
+        box-shadow: 0 1px 5px rgb(17 26 43 / 10%);
+      }
+
+      .context-panel {
+        min-height: 0;
+        padding: 0 var(--oa-space-5) var(--oa-space-5);
+        overflow-y: auto;
+      }
+
+      .context-panel[hidden] {
+        display: none;
+      }
+
+      .target-card {
+        position: relative;
+        padding: var(--oa-space-4);
+        border: 1px solid color-mix(in srgb, var(--oa-context) 38%, var(--oa-border));
+        border-radius: var(--oa-radius-3);
+        background: var(--oa-context-soft);
+      }
+
+      .target-card[data-state='stopped'] {
+        border-color: var(--oa-border);
+        background: var(--oa-fog);
+      }
+
+      .target-card[data-state='archived'] {
+        border-color: color-mix(in srgb, var(--oa-danger) 25%, var(--oa-border));
+        background: var(--oa-danger-soft);
+      }
+
+      .target-card[data-state='stopped'] .target-source {
+        color: var(--oa-text-muted);
+      }
+
+      .target-card[data-state='archived'] .target-source {
+        color: var(--oa-danger);
+      }
+
+      .target-heading {
+        justify-content: space-between;
+        gap: var(--oa-space-2);
+      }
+
+      .target-source {
+        color: var(--oa-context);
+        letter-spacing: 0.05em;
+      }
+
+      .target-card h3 {
+        margin: 0.62rem 0 0.28rem;
+        font-family: var(--oa-font-display);
+        font-size: var(--oa-text-4);
+        letter-spacing: var(--oa-tracking-tight);
+      }
+
+      .target-card > p {
+        margin: 0;
+        color: var(--oa-text-muted);
+        font-size: var(--oa-text-1);
+        line-height: 1.55;
+      }
+
+      .target-fields {
+        display: grid;
+        gap: 0.42rem;
+        margin-top: var(--oa-space-4);
+      }
+
+      .target-field {
+        display: grid;
+        grid-template-columns: 4.5rem minmax(0, 1fr);
+        gap: var(--oa-space-2);
+        align-items: baseline;
+        padding-top: 0.42rem;
+        border-top: 1px solid rgb(217 137 19 / 22%);
+        font-size: var(--oa-text-0);
+      }
+
+      .target-field span {
+        color: var(--oa-text-faint);
+      }
+
+      .target-field code {
+        overflow: hidden;
+        color: var(--oa-text);
+        font-family: var(--oa-font-mono);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .composer {
+        margin-top: var(--oa-space-3);
+        padding: var(--oa-space-3);
+        border: 1px solid var(--oa-border);
+        border-radius: var(--oa-radius-3);
+        background: var(--oa-surface);
+        box-shadow: var(--oa-shadow-float);
+      }
+
+      .target-chip {
+        display: inline-flex;
+        max-width: 100%;
+        align-items: center;
+        gap: 0.38rem;
+        padding: 0.35rem 0.48rem;
+        border-radius: 0.45rem;
+        background: var(--oa-context-soft);
+        color: var(--oa-context);
+        font-family: var(--oa-font-mono);
+        font-size: 0.62rem;
+      }
+
+      .target-chip span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .composer label {
+        display: block;
+        margin: var(--oa-space-3) 0 var(--oa-space-2);
+        font-size: var(--oa-text-1);
+        font-weight: 750;
+      }
+
+      .composer textarea {
+        width: 100%;
+        min-height: 5.4rem;
+        resize: vertical;
+        padding: 0;
+        border: 0;
+        outline: 0;
+        background: transparent;
+        font-size: var(--oa-text-2);
+        line-height: 1.55;
+      }
+
+      .composer textarea::placeholder {
+        color: var(--oa-text-faint);
+      }
+
+      .composer-actions {
+        justify-content: space-between;
+        gap: var(--oa-space-2);
+        margin-top: var(--oa-space-2);
+      }
+
+      .primary-button {
+        padding: 0 0.9rem;
+        background: var(--oa-graphite);
+        color: var(--oa-white);
+        font-size: var(--oa-text-1);
+        font-weight: 760;
+      }
+
+      .primary-button:hover {
+        background: var(--oa-graphite-soft);
+      }
+
+      .primary-button:disabled,
+      .quiet-button:disabled,
+      .segmented button:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+
+      .annotation-list {
+        display: grid;
+        gap: var(--oa-space-3);
+      }
+
+      .annotation-record {
+        padding: var(--oa-space-3);
+        border: 1px solid var(--oa-border);
+        border-radius: var(--oa-radius-2);
+        background: var(--oa-surface);
+      }
+
+      .annotation-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--oa-space-2);
+        margin-bottom: 0.48rem;
+        color: var(--oa-text-faint);
+        font-size: 0.64rem;
+      }
+
+      .annotation-header .meta-row {
+        gap: 0.45rem;
+      }
+
+      .annotation-id,
+      .annotation-status,
+      .annotation-target {
+        font-family: var(--oa-font-mono);
+      }
+
+      .annotation-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.38rem;
+        color: var(--oa-context);
+        font-size: 0.62rem;
+        font-weight: 750;
+        text-transform: uppercase;
+      }
+
+      .annotation-status::before {
+        width: 0.48rem;
+        height: 0.48rem;
+        border-radius: 50%;
+        background: currentColor;
+        content: '';
+      }
+
+      .annotation-status.applied {
+        color: var(--oa-data);
+      }
+
+      .annotation-record > p {
+        margin: 0;
+        color: var(--oa-text);
+        font-size: var(--oa-text-1);
+        line-height: 1.55;
+      }
+
+      .annotation-target {
+        display: block;
+        margin-top: var(--oa-space-2);
+        color: var(--oa-context);
+        font-size: 0.62rem;
+      }
+
+      .annotation-attachment {
+        display: inline-flex;
+        width: fit-content;
+        align-items: center;
+        gap: 0.35rem;
+        margin-top: var(--oa-space-2);
+        padding: 0.28rem 0.42rem;
+        border: 1px solid var(--oa-border);
+        border-radius: 0.4rem;
+        background: var(--oa-fog);
+        color: var(--oa-text-muted);
+        font-family: var(--oa-font-mono);
+        font-size: 0.6rem;
+      }
+
+      .annotation-response {
+        margin-top: var(--oa-space-3);
+        padding-top: var(--oa-space-3);
+        border-top: 1px solid var(--oa-border);
+      }
+
+      .annotation-response strong {
+        display: block;
+        margin-bottom: 0.35rem;
+        color: var(--oa-signal);
+        font-size: 0.64rem;
+      }
+
+      .annotation-response p {
+        margin: 0;
+        color: var(--oa-text-muted);
+        font-size: var(--oa-text-0);
+        line-height: 1.55;
+      }
+
+      .evidence-card {
+        margin-top: var(--oa-space-3);
+        padding: var(--oa-space-3);
+        border: 1px solid color-mix(in srgb, var(--oa-data) 32%, var(--oa-border));
+        border-radius: var(--oa-radius-2);
+        background: var(--oa-data-soft);
+      }
+
+      .evidence-card .meta-row {
+        justify-content: space-between;
+        gap: var(--oa-space-2);
+      }
+
+      .evidence-card strong {
+        color: var(--oa-data);
+        font-size: var(--oa-text-1);
+      }
+
+      .evidence-card code {
+        color: var(--oa-text-muted);
+        font-family: var(--oa-font-mono);
+        font-size: 0.62rem;
+      }
+
+      .evidence-card p {
+        margin: 0.55rem 0 0;
+        font-size: var(--oa-text-0);
+      }
+
+      .context-trace {
+        position: absolute;
+        z-index: 10;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        overflow: visible;
+        pointer-events: none;
+      }
+
+      .context-trace path {
+        fill: none;
+        stroke: var(--oa-context);
+        stroke-dasharray: 5 6;
+        stroke-linecap: round;
+        stroke-width: 1.6;
+        filter: drop-shadow(0 2px 4px rgb(217 137 19 / 26%));
+        transition: d var(--oa-duration-trace) var(--oa-ease);
+      }
+
+      .context-trace circle {
+        fill: var(--oa-context);
+        stroke: var(--oa-context-soft);
+        stroke-width: 5;
+      }
+
+      .context-hidden .context-trace {
+        display: none;
+      }
+
+      .status-strip {
+        position: relative;
+        z-index: 30;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--oa-space-4);
+        padding: 0 var(--oa-space-4);
+        border-top: 1px solid var(--oa-border);
+        background: var(--oa-surface-soft);
+        color: var(--oa-text-faint);
+        letter-spacing: 0.02em;
+        text-transform: none;
+      }
+
+      .status-group {
+        min-width: 0;
+        gap: var(--oa-space-4);
+      }
+
+      .status-item {
+        display: inline-flex;
+        min-width: 0;
+        align-items: center;
+        gap: 0.38rem;
+        white-space: nowrap;
+      }
+
+      .status-item::before {
+        width: 0.38rem;
+        height: 0.38rem;
+        border-radius: 50%;
+        background: var(--oa-text-faint);
+        content: '';
+      }
+
+      .status-item.synced::before {
+        background: var(--oa-data);
+      }
+
+      .status-item.lifecycle[data-state='active']::before {
+        background: var(--oa-data);
+      }
+
+      .status-item.lifecycle[data-state='stopped']::before {
+        background: var(--oa-text-faint);
+      }
+
+      .status-item.lifecycle[data-state='archived'] {
+        color: var(--oa-danger);
+      }
+
+      .status-item.lifecycle[data-state='archived']::before {
+        background: var(--oa-danger);
+      }
+
+      .status-item.context::before {
+        background: var(--oa-context);
+      }
+
+      .status-item.package::before {
+        background: var(--oa-package);
+      }
+
+      .toast {
+        position: fixed;
+        z-index: 100;
+        right: var(--oa-space-5);
+        bottom: calc(var(--oa-status-height) + var(--oa-space-4));
+        max-width: 22rem;
+        padding: 0.72rem 0.9rem;
+        border: 1px solid var(--oa-border);
+        border-radius: var(--oa-radius-2);
+        background: var(--oa-graphite);
+        color: var(--oa-white);
+        box-shadow: var(--oa-shadow-menu);
+        font-size: var(--oa-text-1);
+        opacity: 0;
+        pointer-events: none;
+        transform: translateY(0.5rem);
+        transition:
+          opacity var(--oa-duration-fast) var(--oa-ease),
+          transform var(--oa-duration-fast) var(--oa-ease);
+      }
+
+      .toast.is-visible {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      @media (max-width: 1180px) {
+        :root {
+          --oa-context-width: 19.5rem;
+        }
+
+        .package-identity strong {
+          max-width: 16rem;
+        }
+      }
+
+      @media (max-width: 1080px) {
+        body {
+          overflow: auto;
+        }
+
+        .app-shell {
+          min-height: 100vh;
+          grid-template-rows: auto auto var(--oa-status-height);
+        }
+
+        .command-bar {
+          position: sticky;
+          top: 0;
+          min-height: var(--oa-command-height);
+        }
+
+        .workbench-grid,
+        .context-hidden .workbench-grid {
+          display: block;
+          overflow: hidden;
+        }
+
+        .artifact-stage {
+          min-height: 43rem;
+        }
+
+        .context-rail {
+          position: fixed;
+          z-index: 70;
+          top: var(--oa-command-height);
+          bottom: var(--oa-status-height);
+          left: 0;
+          visibility: visible;
+          width: min(var(--oa-context-width), calc(100vw - 3rem));
+          min-height: 0;
+          border-right: 1px solid var(--oa-border);
+          background: var(--oa-surface-soft);
+          box-shadow: var(--oa-shadow-float);
+          opacity: 1;
+          transform: none;
+        }
+
+        .context-hidden .context-rail {
+          visibility: hidden;
+          opacity: 0;
+          pointer-events: none;
+          transform: translateX(-105%);
+        }
+
+        .context-trace {
+          display: none;
+        }
+
+        .ownership-label {
+          left: auto;
+          right: 0.75rem;
+          transform: none;
+        }
+
+        .status-strip {
+          position: static;
+        }
+      }
+
+      @media (max-width: 680px) {
+        .command-bar {
+          grid-template-columns: minmax(0, 1fr) auto;
+          padding: 0 var(--oa-space-2);
+        }
+
+        .command-leading {
+          gap: var(--oa-space-2);
+        }
+
+        .pointer-control,
+        .quiet-command {
+          display: none;
+        }
+
+        .package-identity strong {
+          max-width: 12rem;
+        }
+
+        .artifact-stage {
+          min-height: 46rem;
+          padding: var(--oa-space-2);
+        }
+
+        .stage-toolbar {
+          align-items: flex-start;
+        }
+
+        .toolbar-group .view-button:not(:last-child) {
+          display: none;
+        }
+
+        .editor-top {
+          grid-template-columns: 1fr;
+        }
+
+        .asset-library {
+          display: none;
+        }
+
+        .markdown-view {
+          grid-template-columns: 1fr;
+        }
+
+        .document-outline {
+          display: none;
+        }
+
+        .markdown-document {
+          padding: 2rem 1.25rem;
+        }
+
+        .preview-panel {
+          min-height: 17rem;
+        }
+
+        .context-header,
+        .context-panel {
+          padding-right: var(--oa-space-4);
+          padding-left: var(--oa-space-4);
+        }
+
+        .context-tabs {
+          margin-right: var(--oa-space-4);
+          margin-left: var(--oa-space-4);
+        }
+
+        .status-strip {
+          padding: 0 var(--oa-space-2);
+        }
+
+        .status-group {
+          gap: var(--oa-space-2);
+        }
+
+        .status-item.package,
+        .status-secondary {
+          display: none;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          scroll-behavior: auto !important;
+          transition-duration: 0.01ms !important;
+        }
+
+        .context-trace {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app-shell" id="appShell">
+      <header class="command-bar">
+        <div class="command-leading">
+          <div class="package-identity" aria-label="Current Artifact Package">
+            <strong id="packageDisplayName">ChatCut Editor</strong>
+            <span class="package-version" id="packageVersion">1.4.0</span>
+          </div>
+        </div>
+
+        <div class="command-actions">
+          <div class="segmented" aria-label="选择模式">
+            <button class="pointer-control" id="pointerMode" type="button" aria-pressed="true">
+              Pointer
+            </button>
+            <button class="inspect-control" id="inspectMode" type="button" aria-pressed="false">
+              Inspect
+            </button>
+          </div>
+          <button class="icon-button quiet-command" type="button" aria-label="更多 Workbench 操作">
+            ···
+          </button>
+        </div>
+      </header>
+
+      <main class="workbench-grid" id="workbenchGrid">
+        <button
+          class="context-restore"
+          id="contextRailRestore"
+          type="button"
+          aria-label="展开 Context"
+          aria-controls="contextRail"
+        >
+          <span class="context-restore-arrow" aria-hidden="true">›</span>
+          <span>Context</span>
+        </button>
+
+        <section class="artifact-stage" aria-labelledby="artifact-title">
+          <header class="stage-toolbar">
+            <div class="artifact-title">
+              <h1 id="artifact-title">Rough cut · Interview opener</h1>
+              <p id="artifactMeta">project.json · revision r18 · committed</p>
+            </div>
+            <div class="toolbar-group" id="viewControls" aria-label="Artifact 视图操作">
+              <button class="view-button" type="button">Fit</button>
+              <button class="view-button" type="button">100%</button>
+              <button class="view-button" type="button" aria-label="全屏查看 Artifact">⛶</button>
+            </div>
+          </header>
+
+          <div class="artifact-frame" id="artifactViewport">
+            <span class="ownership-label" id="ownershipLabel">Package-owned UI</span>
+            <span
+              class="inspector-banner"
+              id="inspectorBanner"
+              title="OA saves DOM evidence; the Package must re-resolve targets before Agent action."
+            >
+              Inspector fallback · DOM evidence only · ⌘/Ctrl-click to add · Esc to exit
+            </span>
+
+            <div class="editor package-view" id="videoView" data-instance-view="video">
+              <div class="editor-top">
+                <aside class="asset-library" aria-label="Package 素材库示例">
+                  <div class="asset-tabs" role="tablist" aria-label="素材类型">
+                    <button type="button" role="tab" aria-selected="true">LIBRARY</button>
+                    <button type="button" role="tab" aria-selected="false">ASSETS</button>
+                    <button type="button" role="tab" aria-selected="false">TRANSCRIPT</button>
+                  </div>
+                  <div class="library-title">
+                    <strong>Motion graphics</strong>
+                    <span>12 items</span>
+                  </div>
+                  <div class="asset-grid">
+                    <div class="asset-card">
+                      <span class="asset-lines"><i></i><i></i><i></i></span>
+                      Quote card
+                    </div>
+                    <div class="asset-card">
+                      <span class="asset-lines"><i></i><i></i><i></i></span>
+                      Lower third
+                    </div>
+                    <div class="asset-card">
+                      <span class="asset-lines"><i></i><i></i><i></i></span>
+                      Key point
+                    </div>
+                    <div class="asset-card">
+                      <span class="asset-lines"><i></i><i></i><i></i></span>
+                      CTA
+                    </div>
+                  </div>
+                </aside>
+
+                <section class="preview-panel" aria-label="视频预览">
+                  <div class="preview-frame">
+                    <span class="window-shape" aria-hidden="true"></span>
+                    <span class="subject" aria-hidden="true">
+                      <span class="subject-head"></span>
+                      <span class="subject-body"></span>
+                    </span>
+                    <div class="preview-caption">
+                      <strong>“What changed everything was seeing the first useful cut.”</strong>
+                      <span class="timecode">00:17 / 00:42</span>
+                    </div>
+                  </div>
+                </section>
+              </div>
+
+              <section class="editor-timeline" aria-label="视频时间线">
+                <div class="track-labels" aria-hidden="true">
+                  <div class="timeline-scale">00:00</div>
+                  <div class="track-label">
+                    <span class="track-badge graphics">MG</span>
+                    <span class="track-name">Graphics</span>
+                  </div>
+                  <div class="track-label">
+                    <span class="track-badge video">V1</span>
+                    <span class="track-name">Video</span>
+                  </div>
+                  <div class="track-label">
+                    <span class="track-badge audio">A1</span>
+                    <span class="track-name">Audio</span>
+                  </div>
+                </div>
+
+                <div class="tracks">
+                  <div class="timeline-scale">
+                    <span>00:00</span><span>00:10</span><span>00:20</span><span>00:30</span
+                    ><span>00:40</span>
+                  </div>
+                  <div class="track-row">
+                    <button
+                      class="clip graphics short"
+                      type="button"
+                      data-target="quote-card"
+                      aria-label="选择 Quote card 图层"
+                    >
+                      Quote card
+                    </button>
+                    <button
+                      class="clip graphics"
+                      type="button"
+                      data-target="lower-third"
+                      aria-label="选择 Lower third 图层"
+                    >
+                      Lower third
+                    </button>
+                    <button
+                      class="clip graphics short"
+                      type="button"
+                      data-target="cta"
+                      aria-label="选择 CTA 图层"
+                    >
+                      CTA
+                    </button>
+                  </div>
+                  <div class="track-row">
+                    <button
+                      class="clip video short"
+                      type="button"
+                      data-target="take-a"
+                      aria-label="选择 Take A 片段"
+                    >
+                      Take A
+                    </button>
+                    <button
+                      class="clip video is-selected"
+                      id="defaultTarget"
+                      type="button"
+                      data-target="take-b"
+                      aria-label="选择 Take B 片段，当前已选择"
+                      aria-describedby="target-title"
+                    >
+                      Take B
+                    </button>
+                    <button
+                      class="clip video long"
+                      type="button"
+                      data-target="take-c"
+                      aria-label="选择 Take C 片段"
+                    >
+                      Take C
+                    </button>
+                    <button
+                      class="clip video short"
+                      type="button"
+                      data-target="cta-shot"
+                      aria-label="选择 CTA shot 片段"
+                    >
+                      CTA shot
+                    </button>
+                  </div>
+                  <div class="track-row">
+                    <button
+                      class="clip audio"
+                      type="button"
+                      data-target="interview-audio"
+                      aria-label="选择 Interview audio 音频"
+                    >
+                      Interview audio · waveform
+                    </button>
+                    <button
+                      class="clip audio short"
+                      type="button"
+                      data-target="music"
+                      aria-label="选择 Music 音频"
+                    >
+                      Music
+                    </button>
+                  </div>
+                  <span class="playhead" aria-hidden="true"></span>
+                </div>
+              </section>
+            </div>
+
+            <div
+              class="markdown-view package-view"
+              id="markdownView"
+              data-instance-view="markdown"
+              hidden
+            >
+              <aside class="document-outline" aria-label="文档大纲">
+                <h2>Launch brief</h2>
+                <button class="outline-item is-current" type="button">Goal</button>
+                <button class="outline-item" type="button">Audience</button>
+                <button class="outline-item" type="button">Message</button>
+                <button class="outline-item" type="button">Deliverables</button>
+              </aside>
+              <article class="markdown-document" aria-label="Markdown 文档编辑器">
+                <h1>Spring launch brief</h1>
+                <p class="document-meta">launch-brief.md · autosaved 10:42</p>
+                <h2>Goal</h2>
+                <p>
+                  Introduce the new collaborative editing flow without turning the launch into a
+                  feature inventory.
+                </p>
+                <h2>Core message</h2>
+                <button
+                  class="markdown-selection is-selected"
+                  id="markdownDefaultTarget"
+                  type="button"
+                  data-target="brief-message"
+                  aria-label="选择 Core message 段落"
+                >
+                  The first useful cut should feel like a conversation between the editor and the
+                  Agent, not a handoff between two separate tools.
+                </button>
+                <h2>Deliverables</h2>
+                <p>One product film, three short clips, and a reusable launch page narrative.</p>
+              </article>
+            </div>
+
+            <div
+              class="runtime-view package-view stopped-view"
+              id="stoppedView"
+              data-instance-view="metrics"
+              hidden
+            >
+              <section class="runtime-state-card">
+                <span class="runtime-state-icon" aria-hidden="true">■</span>
+                <h2>This Instance is stopped</h2>
+                <p>
+                  Data and Annotation records are still available. Start the Runtime to render the
+                  Data Board or call its Tools.
+                </p>
+                <div class="runtime-state-meta">
+                  <span>Last active · today 09:18</span>
+                  <span>Data · metrics.sqlite · revision r42</span>
+                  <span>Package · Data Board 0.9.2</span>
+                </div>
+                <button
+                  class="primary-button runtime-action"
+                  type="button"
+                  data-runtime-action="start"
+                >
+                  Start instance
+                </button>
+              </section>
+            </div>
+
+            <div
+              class="runtime-view package-view archived-view"
+              id="archivedView"
+              data-instance-view="archive"
+              hidden
+            >
+              <section class="runtime-state-card">
+                <span class="runtime-state-icon" aria-hidden="true">AR</span>
+                <h2>This Instance is archived</h2>
+                <p>
+                  The Package is not running and the Instance is read-only. Restore it before
+                  editing Data or invoking Tools.
+                </p>
+                <div class="runtime-state-meta">
+                  <span>Archived · 2026-07-18</span>
+                  <span>Data · project.json · revision r31</span>
+                  <span>Package · ChatCut Editor 1.3.2</span>
+                </div>
+                <button
+                  class="primary-button runtime-action"
+                  type="button"
+                  data-runtime-action="restore"
+                >
+                  Restore instance
+                </button>
+              </section>
+            </div>
+          </div>
+        </section>
+
+        <aside class="context-rail" id="contextRail" aria-labelledby="context-title">
+          <header class="context-header">
+            <div>
+              <span class="section-label">Human context</span>
+              <h2 id="context-title">Context</h2>
+            </div>
+            <button
+              class="icon-button"
+              id="contextRailCollapse"
+              type="button"
+              aria-label="收起 Context"
+            >
+              ‹
+            </button>
+          </header>
+
+          <div class="context-tabs" role="tablist" aria-label="Context Rail 视图">
+            <button
+              class="tab-button"
+              type="button"
+              role="tab"
+              aria-selected="true"
+              aria-controls="contextPanel"
+              data-panel-button="context"
+            >
+              <span id="contextTabLabel">Current target</span>
+            </button>
+            <button
+              class="tab-button"
+              type="button"
+              role="tab"
+              aria-selected="false"
+              aria-controls="annotationsPanel"
+              data-panel-button="annotations"
+            >
+              Annotations · <span id="annotationCount">3</span>
+            </button>
+          </div>
+
+          <section class="context-panel" id="contextPanel" role="tabpanel">
+            <article class="target-card" id="targetCard">
+              <div class="target-heading">
+                <span class="target-source" id="targetSource">Package Target</span>
+                <span class="timecode" id="targetTime">00:12.4–00:18.7</span>
+              </div>
+              <h3 id="target-title">Take B · interview clip</h3>
+              <p id="targetSummary">
+                Speaker pauses before the main point. The clip is still present.
+              </p>
+              <div class="target-fields">
+                <div class="target-field">
+                  <span>Selector</span>
+                  <code id="targetSelector">timeline.clip:take-b</code>
+                </div>
+                <div class="target-field">
+                  <span>Data</span>
+                  <code id="targetData">project.json · r18</code>
+                </div>
+                <div class="target-field">
+                  <span>Source</span>
+                  <code id="targetProvider">chatcut.clip-range</code>
+                </div>
+              </div>
+            </article>
+
+            <form class="composer" id="annotationForm">
+              <span class="target-chip">
+                <span aria-hidden="true">◎</span>
+                <span id="composerTarget">Take B · 00:12.4–00:18.7</span>
+              </span>
+              <label for="annotationBody">Tell an Agent what matters here</label>
+              <textarea
+                id="annotationBody"
+                placeholder="例如：删掉进入主题前的停顿，但保留吸气声。"
+              ></textarea>
+              <span class="sr-only" id="visualAttachmentHelp">
+                Optional: attach the current Artifact view as visual evidence. OA saves the
+                structured Target Snapshot automatically.
+              </span>
+              <div class="composer-actions">
+                <button
+                  class="quiet-button"
+                  id="attachVisual"
+                  type="button"
+                  aria-describedby="visualAttachmentHelp"
+                  aria-pressed="false"
+                  title="Attach the current Artifact view as optional visual evidence"
+                >
+                  Attach screenshot
+                </button>
+                <button class="primary-button" type="submit">Create annotation</button>
+              </div>
+            </form>
+          </section>
+
+          <section class="context-panel" id="annotationsPanel" role="tabpanel" hidden>
+            <div class="annotation-list" id="annotationList"></div>
+          </section>
+        </aside>
+
+        <svg class="context-trace" id="contextTrace" aria-hidden="true">
+          <path id="tracePath"></path>
+          <circle id="traceStart" r="3.5"></circle>
+          <circle id="traceEnd" r="3.5"></circle>
+        </svg>
+      </main>
+
+      <footer class="status-strip" aria-label="Instance 状态">
+        <div class="status-group">
+          <span class="status-item lifecycle" id="currentInstanceState" data-state="active">
+            <span id="currentInstanceStateText">Active</span>
+          </span>
+          <span class="status-item synced" id="syncStatus">Data synced · r18</span>
+          <span class="status-item package" id="toolCount">6 Tools</span>
+          <span class="status-item context"><span id="openCount">3</span> open Annotations</span>
+        </div>
+        <span class="status-secondary">Instance ID hidden from Package UI · SDK scoped</span>
+      </footer>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script>
+      const targetDefinitions = {
+        'take-a': {
+          title: 'Take A · interview clip',
+          time: '00:06.0–00:12.4',
+          selector: 'timeline.clip:take-a',
+          summary: 'Opening sentence before the speaker reaches the main point.',
+          provider: 'chatcut.clip-range',
+        },
+        'take-b': {
+          title: 'Take B · interview clip',
+          time: '00:12.4–00:18.7',
+          selector: 'timeline.clip:take-b',
+          summary: 'Speaker pauses before the main point. The clip is still present.',
+          provider: 'chatcut.clip-range',
+        },
+        'take-c': {
+          title: 'Take C · interview clip',
+          time: '00:18.7–00:31.2',
+          selector: 'timeline.clip:take-c',
+          summary: 'The core explanation and strongest quote in the rough cut.',
+          provider: 'chatcut.clip-range',
+        },
+        'cta-shot': {
+          title: 'CTA shot · video clip',
+          time: '00:31.2–00:38.0',
+          selector: 'timeline.clip:cta-shot',
+          summary: 'Closing shot with the final call to action.',
+          provider: 'chatcut.clip-range',
+        },
+        'quote-card': {
+          title: 'Quote card · motion graphic',
+          time: '00:08.0–00:12.0',
+          selector: 'timeline.graphic:quote-card',
+          summary: 'On-screen quote displayed over the opening section.',
+          provider: 'chatcut.graphic',
+        },
+        'lower-third': {
+          title: 'Lower third · motion graphic',
+          time: '00:12.0–00:20.0',
+          selector: 'timeline.graphic:lower-third',
+          summary: 'Speaker identity and role shown at the bottom of the frame.',
+          provider: 'chatcut.graphic',
+        },
+        cta: {
+          title: 'CTA · motion graphic',
+          time: '00:34.0–00:40.0',
+          selector: 'timeline.graphic:cta',
+          summary: 'Final text treatment and outbound action.',
+          provider: 'chatcut.graphic',
+        },
+        'interview-audio': {
+          title: 'Interview audio · source track',
+          time: '00:00.0–00:38.0',
+          selector: 'timeline.audio:interview',
+          summary: 'Primary dialogue track bound to the interview source video.',
+          provider: 'chatcut.audio-range',
+        },
+        music: {
+          title: 'Music · audio track',
+          time: '00:24.0–00:42.0',
+          selector: 'timeline.audio:music',
+          summary: 'Background music under the final explanation and CTA.',
+          provider: 'chatcut.audio-range',
+        },
+        'brief-message': {
+          title: 'Core message · paragraph',
+          time: 'lines 12–15',
+          selector: 'document.range:core-message',
+          summary:
+            'The selected paragraph defines how the launch should frame Human–Agent collaboration.',
+          provider: 'markdown.text-range',
+        },
+      };
+
+      const instanceDefinitions = {
+        video: {
+          name: '访谈视频剪辑',
+          state: 'active',
+          stateLabel: 'Active',
+          view: 'videoView',
+          title: 'Rough cut · Interview opener',
+          meta: 'project.json · revision r18 · committed',
+          dataLabel: 'project.json · r18',
+          packageName: 'ChatCut Editor',
+          packageVersion: '1.4.0',
+          packageSource: 'source-owned',
+          tools: 6,
+          providers: 2,
+          openAnnotations: 3,
+          sync: 'Data synced · r18',
+          defaultTarget: 'take-b',
+          annotations: [
+            {
+              id: 'ann_7F2',
+              status: 'applied',
+              time: '10:24',
+              body: '删掉进入主题前的停顿，但保留吸气声。',
+              target: 'Take B · 00:12.4–00:18.7',
+              response: 'Agent 已重新定位 Take B，并调用 timeline.trim。片段缩短了 1.8 秒。',
+              evidence: 'call_8J2 · r19',
+              evidenceDetail: 'Data 已提交；Human 验收前 Annotation 保持 applied。',
+            },
+            {
+              id: 'ann_6C8',
+              status: 'open',
+              time: '09:58',
+              body: 'Quote card 出现得太早，请移动到第一句话说完之后。',
+              target: 'Quote card · 00:08.0–00:12.0',
+            },
+            {
+              id: 'ann_51A',
+              status: 'open',
+              time: '09:41',
+              body: 'CTA 段落保留音乐，但把人声淡出提前半秒。',
+              target: 'CTA shot · 00:31.2–00:38.0',
+            },
+          ],
+        },
+        markdown: {
+          name: 'Launch brief',
+          state: 'active',
+          stateLabel: 'Active',
+          view: 'markdownView',
+          title: 'Launch brief · Spring release',
+          meta: 'launch-brief.md · revision r7 · committed',
+          dataLabel: 'launch-brief.md · r7',
+          packageName: 'Markdown Editor',
+          packageVersion: '0.8.1',
+          packageSource: 'local binding',
+          tools: 3,
+          providers: 1,
+          openAnnotations: 1,
+          sync: 'Data synced · r7',
+          defaultTarget: 'brief-message',
+          annotations: [
+            {
+              id: 'ann_42D',
+              status: 'open',
+              time: '09:42',
+              body: '这里不要写成功能清单，要强调编辑者和 Agent 在同一个内容上协作。',
+              target: 'Core message · lines 12–15',
+            },
+          ],
+        },
+        metrics: {
+          name: 'Weekly metrics',
+          state: 'stopped',
+          stateLabel: 'Stopped',
+          view: 'stoppedView',
+          title: 'Weekly metrics · Data Board',
+          meta: 'metrics.sqlite · revision r42 · runtime stopped',
+          dataLabel: 'metrics.sqlite · r42',
+          packageName: 'Data Board',
+          packageVersion: '0.9.2',
+          packageSource: 'database binding',
+          tools: 4,
+          providers: 1,
+          openAnnotations: 0,
+          sync: 'Data retained · r42',
+          context: {
+            title: 'Runtime is stopped',
+            summary:
+              'The durable Data remains readable, but Package UI, Target Providers, and Tools are unavailable until restart.',
+            selector: 'instance.lifecycle',
+            provider: 'oa.runtime',
+          },
+          annotations: [],
+        },
+        archive: {
+          name: 'Spring launch cut',
+          state: 'archived',
+          stateLabel: 'Archived',
+          view: 'archivedView',
+          title: 'Spring launch cut · archived',
+          meta: 'project.json · revision r31 · archived 2026-07-18',
+          dataLabel: 'project.json · r31',
+          packageName: 'ChatCut Editor',
+          packageVersion: '1.3.2',
+          packageSource: 'archived binding',
+          tools: 6,
+          providers: 2,
+          openAnnotations: 0,
+          sync: 'Archive retained · r31',
+          context: {
+            title: 'Archived Instance',
+            summary:
+              'This Instance is read-only. Its Data and Annotation history remain available for inspection and recovery.',
+            selector: 'instance.lifecycle',
+            provider: 'oa.archive',
+          },
+          annotations: [],
+        },
+      };
+
+      const appShell = document.querySelector('#appShell');
+      const workbenchGrid = document.querySelector('#workbenchGrid');
+      const artifactViewport = document.querySelector('#artifactViewport');
+      const instanceViews = [...document.querySelectorAll('[data-instance-view]')];
+      const packageDisplayName = document.querySelector('#packageDisplayName');
+      const packageVersion = document.querySelector('#packageVersion');
+      const currentInstanceState = document.querySelector('#currentInstanceState');
+      const currentInstanceStateText = document.querySelector('#currentInstanceStateText');
+      const contextRailCollapse = document.querySelector('#contextRailCollapse');
+      const contextRailRestore = document.querySelector('#contextRailRestore');
+      const pointerMode = document.querySelector('#pointerMode');
+      const inspectMode = document.querySelector('#inspectMode');
+      const targets = [...document.querySelectorAll('[data-target]')];
+      const artifactTitle = document.querySelector('#artifact-title');
+      const artifactMeta = document.querySelector('#artifactMeta');
+      const viewControls = document.querySelector('#viewControls');
+      const ownershipLabel = document.querySelector('#ownershipLabel');
+      const targetCard = document.querySelector('#targetCard');
+      const targetTitle = document.querySelector('#target-title');
+      const targetTime = document.querySelector('#targetTime');
+      const targetSummary = document.querySelector('#targetSummary');
+      const targetSelector = document.querySelector('#targetSelector');
+      const targetData = document.querySelector('#targetData');
+      const targetProvider = document.querySelector('#targetProvider');
+      const targetSource = document.querySelector('#targetSource');
+      const composerTarget = document.querySelector('#composerTarget');
+      const contextTabLabel = document.querySelector('#contextTabLabel');
+      const contextTrace = document.querySelector('#contextTrace');
+      const tracePath = document.querySelector('#tracePath');
+      const traceStart = document.querySelector('#traceStart');
+      const traceEnd = document.querySelector('#traceEnd');
+      const annotationForm = document.querySelector('#annotationForm');
+      const annotationBody = document.querySelector('#annotationBody');
+      const annotationList = document.querySelector('#annotationList');
+      const annotationCount = document.querySelector('#annotationCount');
+      const openCount = document.querySelector('#openCount');
+      const toolCount = document.querySelector('#toolCount');
+      const syncStatus = document.querySelector('#syncStatus');
+      const attachVisual = document.querySelector('#attachVisual');
+      const toast = document.querySelector('#toast');
+      const panelButtons = [...document.querySelectorAll('[data-panel-button]')];
+      const panels = {
+        context: document.querySelector('#contextPanel'),
+        annotations: document.querySelector('#annotationsPanel'),
+      };
+
+      let currentInstanceKey = 'video';
+      let selectedTarget = document.querySelector('#defaultTarget');
+      let selectedTargets = new Set(selectedTarget ? [selectedTarget] : []);
+      let selectionOrigin = 'package';
+      let inspectorActive = false;
+      let visualAttached = false;
+      let toastTimer;
+
+      function showToast(message) {
+        toast.textContent = message;
+        toast.classList.add('is-visible');
+        window.clearTimeout(toastTimer);
+        toastTimer = window.setTimeout(() => toast.classList.remove('is-visible'), 2400);
+      }
+
+      function setPanel(name) {
+        for (const [key, panel] of Object.entries(panels)) {
+          panel.hidden = key !== name;
+        }
+        for (const button of panelButtons) {
+          button.setAttribute('aria-selected', String(button.dataset.panelButton === name));
+        }
+        window.requestAnimationFrame(updateTrace);
+      }
+
+      function renderAnnotations(definition) {
+        annotationList.replaceChildren();
+
+        if (!definition.annotations.length) {
+          const empty = document.createElement('article');
+          empty.className = 'annotation-record';
+          const copy = document.createElement('p');
+          copy.textContent =
+            definition.state === 'archived'
+              ? 'This archived Instance has no open Annotation.'
+              : 'This Instance has no open Annotation.';
+          empty.append(copy);
+          annotationList.append(empty);
+          return;
+        }
+
+        for (const annotation of definition.annotations) {
+          const item = document.createElement('article');
+          item.className = 'annotation-record';
+          const header = document.createElement('div');
+          header.className = 'annotation-header';
+          const identity = document.createElement('span');
+          identity.className = 'annotation-id';
+          identity.textContent = annotation.id;
+          const status = document.createElement('span');
+          status.className = `annotation-status ${annotation.status}`;
+          status.textContent = annotation.status;
+          const time = document.createElement('time');
+          time.textContent = annotation.time;
+          const headerMeta = document.createElement('span');
+          headerMeta.className = 'meta-row';
+          headerMeta.append(status, time);
+          const copy = document.createElement('p');
+          copy.textContent = annotation.body;
+          const target = document.createElement('span');
+          target.className = 'annotation-target';
+          target.textContent = `◎ ${annotation.target}`;
+          header.append(identity, headerMeta);
+          item.append(header, copy, target);
+
+          if (annotation.visualAttachment) {
+            const attachment = document.createElement('span');
+            attachment.className = 'annotation-attachment';
+            attachment.textContent = `▧ ${annotation.visualAttachment}`;
+            item.append(attachment);
+          }
+
+          if (annotation.response) {
+            const response = document.createElement('section');
+            response.className = 'annotation-response';
+            const responseActor = document.createElement('strong');
+            responseActor.textContent = 'Agent response';
+            const responseCopy = document.createElement('p');
+            responseCopy.textContent = annotation.response;
+            response.append(responseActor, responseCopy);
+            item.append(response);
+          }
+
+          if (annotation.evidence) {
+            const evidence = document.createElement('section');
+            evidence.className = 'evidence-card';
+            const evidenceMeta = document.createElement('div');
+            evidenceMeta.className = 'meta-row';
+            const evidenceStatus = document.createElement('strong');
+            evidenceStatus.textContent = 'Applied · awaiting review';
+            const evidenceId = document.createElement('code');
+            evidenceId.textContent = annotation.evidence;
+            const evidenceCopy = document.createElement('p');
+            evidenceCopy.textContent = annotation.evidenceDetail;
+            evidenceMeta.append(evidenceStatus, evidenceId);
+            evidence.append(evidenceMeta, evidenceCopy);
+            item.append(evidence);
+          }
+
+          annotationList.append(item);
+        }
+      }
+
+      function showLifecycleContext(definition) {
+        selectedTargets.clear();
+        selectedTarget = null;
+        syncSelectedTargets();
+        targetCard.dataset.state = definition.state;
+        delete targetCard.dataset.selection;
+        targetSource.textContent = 'Instance state';
+        targetTime.textContent = definition.stateLabel.toUpperCase();
+        targetTitle.textContent = definition.context.title;
+        targetSummary.textContent = definition.context.summary;
+        targetSelector.textContent = definition.context.selector;
+        targetData.textContent = definition.dataLabel;
+        targetProvider.textContent = definition.context.provider;
+        composerTarget.textContent = 'No active Package Target';
+        annotationForm.hidden = true;
+        updateTrace();
+      }
+
+      function switchInstance(key, announce = true) {
+        const definition = instanceDefinitions[key];
+        if (!definition) return;
+
+        if (inspectorActive) setInspector(false);
+        currentInstanceKey = key;
+
+        for (const view of instanceViews) {
+          view.hidden = view.id !== definition.view;
+        }
+
+        packageDisplayName.textContent = definition.packageName;
+        packageVersion.textContent = definition.packageVersion;
+        currentInstanceState.dataset.state = definition.state;
+        currentInstanceStateText.textContent = definition.stateLabel;
+        artifactTitle.textContent = definition.title;
+        artifactMeta.textContent = definition.meta;
+        toolCount.textContent = `${definition.tools} Tools`;
+        syncStatus.textContent = definition.sync;
+        syncStatus.classList.toggle('synced', definition.state === 'active');
+        annotationCount.textContent = String(definition.annotations.length);
+        openCount.textContent = String(definition.openAnnotations);
+        viewControls.hidden = definition.state !== 'active';
+        ownershipLabel.hidden = definition.state !== 'active';
+        contextTabLabel.textContent =
+          definition.state === 'active' ? 'Current target' : 'Instance state';
+        pointerMode.disabled = definition.state !== 'active';
+        inspectMode.disabled = definition.state !== 'active';
+        annotationForm.hidden = definition.state !== 'active';
+        setPanel('context');
+        renderAnnotations(definition);
+
+        if (definition.defaultTarget) {
+          const target = document.querySelector(`[data-target="${definition.defaultTarget}"]`);
+          if (target) selectTarget(target);
+        } else {
+          showLifecycleContext(definition);
+        }
+
+        window.requestAnimationFrame(updateTrace);
+        if (announce) showToast(`Opened ${definition.name} · ${definition.stateLabel}`);
+      }
+
+      function updateTrace() {
+        if (
+          !selectedTarget ||
+          panels.context.hidden ||
+          window.matchMedia('(max-width: 1080px)').matches ||
+          appShell.classList.contains('context-hidden')
+        ) {
+          contextTrace.setAttribute('hidden', '');
+          tracePath.setAttribute('d', '');
+          return;
+        }
+
+        contextTrace.removeAttribute('hidden');
+        const gridRect = workbenchGrid.getBoundingClientRect();
+        const sourceRect = selectedTarget.getBoundingClientRect();
+        const targetRect = targetCard.getBoundingClientRect();
+        const startX = sourceRect.left - gridRect.left;
+        const startY = sourceRect.top + sourceRect.height / 2 - gridRect.top;
+        const endX = targetRect.right - gridRect.left;
+        const endY = targetRect.top + 42 - gridRect.top;
+        const distance = Math.max(70, (startX - endX) * 0.5);
+
+        contextTrace.setAttribute('viewBox', `0 0 ${gridRect.width} ${gridRect.height}`);
+        tracePath.setAttribute(
+          'd',
+          `M ${startX} ${startY} C ${startX - distance} ${startY}, ${endX + distance} ${endY}, ${endX} ${endY}`,
+        );
+        traceStart.setAttribute('cx', startX);
+        traceStart.setAttribute('cy', startY);
+        traceEnd.setAttribute('cx', endX);
+        traceEnd.setAttribute('cy', endY);
+      }
+
+      function syncSelectedTargets() {
+        const orderedTargets = [...selectedTargets];
+
+        for (const target of targets) {
+          const selected = selectedTargets.has(target);
+          target.classList.toggle('is-selected', selected);
+          target.setAttribute('aria-pressed', String(selected));
+
+          if (selected) {
+            target.setAttribute('aria-describedby', 'target-title');
+          } else {
+            target.removeAttribute('aria-describedby');
+          }
+
+          if (selected && orderedTargets.length > 1) {
+            target.dataset.selectionOrder = String(orderedTargets.indexOf(target) + 1);
+          } else {
+            delete target.dataset.selectionOrder;
+          }
+        }
+      }
+
+      function renderTargetContext() {
+        delete targetCard.dataset.state;
+        const definitions = [...selectedTargets]
+          .map((target) => targetDefinitions[target.dataset.target])
+          .filter(Boolean);
+        const fromInspector = selectionOrigin === 'inspector';
+
+        if (!definitions.length) {
+          delete targetCard.dataset.selection;
+          targetSource.textContent = fromInspector ? 'Inspector' : 'Artifact context';
+          targetTime.textContent = 'NO TARGET';
+          targetTitle.textContent = 'No target selected';
+          targetSummary.textContent =
+            'Choose a target, or create an Annotation that applies to the whole Artifact.';
+          targetSelector.textContent = 'artifact';
+          targetData.textContent = instanceDefinitions[currentInstanceKey].dataLabel;
+          targetProvider.textContent = 'oa.artifact';
+          composerTarget.textContent = 'Whole Artifact';
+          annotationForm.hidden = false;
+          window.requestAnimationFrame(updateTrace);
+          return;
+        }
+
+        if (definitions.length > 1) {
+          const names = definitions.map((definition) => definition.title.split(' · ')[0]);
+          const providers = new Set(definitions.map((definition) => definition.provider));
+          targetCard.dataset.selection = 'multiple';
+          targetSource.textContent = fromInspector
+            ? 'Inspector multi-selection'
+            : 'Package multi-selection';
+          targetTime.textContent = `${definitions.length} TARGETS`;
+          targetTitle.textContent = `${definitions.length} targets selected`;
+          targetSummary.textContent = `${names.join('、')} 将作为一个 Selection 随 Annotation 一起提交。`;
+          targetSelector.textContent = `[${definitions
+            .map((definition) => definition.selector)
+            .join(', ')}]`;
+          targetData.textContent = instanceDefinitions[currentInstanceKey].dataLabel;
+          targetProvider.textContent =
+            providers.size === 1 ? [...providers][0] : `${providers.size} target providers`;
+          composerTarget.textContent = `${definitions.length} targets · ${names.join(' + ')}`;
+          annotationForm.hidden = false;
+          window.requestAnimationFrame(updateTrace);
+          return;
+        }
+
+        const [definition] = definitions;
+        delete targetCard.dataset.selection;
+
+        targetTitle.textContent = definition.title;
+        targetTime.textContent = definition.time;
+        targetSummary.textContent = definition.summary;
+        targetSelector.textContent = definition.selector;
+        targetData.textContent = instanceDefinitions[currentInstanceKey].dataLabel;
+        targetProvider.textContent = definition.provider;
+        targetSource.textContent = fromInspector ? 'Inspector fallback' : 'Package Target';
+        composerTarget.textContent = `${definition.title.split(' · ')[0]} · ${definition.time}`;
+        annotationForm.hidden = false;
+
+        window.requestAnimationFrame(updateTrace);
+      }
+
+      function selectTarget(element, { additive = false } = {}) {
+        const definition = targetDefinitions[element.dataset.target];
+        if (!definition) return;
+
+        if (additive) {
+          if (selectedTargets.has(element)) {
+            selectedTargets.delete(element);
+          } else {
+            selectedTargets.add(element);
+          }
+        } else {
+          selectedTargets.clear();
+          selectedTargets.add(element);
+        }
+
+        selectedTarget = selectedTargets.has(element)
+          ? element
+          : [...selectedTargets].at(-1) || null;
+        selectionOrigin = inspectorActive ? 'inspector' : 'package';
+        syncSelectedTargets();
+        renderTargetContext();
+      }
+
+      function setInspector(active) {
+        inspectorActive = active;
+        appShell.classList.toggle('inspect-mode', active);
+        inspectMode.setAttribute('aria-pressed', String(active));
+        pointerMode.setAttribute('aria-pressed', String(!active));
+        renderTargetContext();
+        if (active) {
+          showToast('Inspector fallback · DOM evidence only · ⌘/Ctrl-click to add');
+        }
+      }
+
+      for (const target of targets) {
+        target.addEventListener('click', (event) => {
+          selectTarget(target, {
+            additive: inspectorActive && (event.metaKey || event.ctrlKey),
+          });
+        });
+      }
+
+      for (const button of document.querySelectorAll('[data-runtime-action]')) {
+        button.addEventListener('click', () => {
+          const action = button.dataset.runtimeAction;
+          showToast(
+            action === 'restore'
+              ? 'Restore would return this Instance to Stopped before it can run.'
+              : 'Start would launch the bound Package and restore its UI and Tools.',
+          );
+        });
+      }
+
+      pointerMode.addEventListener('click', () => setInspector(false));
+      inspectMode.addEventListener('click', () => setInspector(true));
+
+      document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && inspectorActive) {
+          setInspector(false);
+          pointerMode.focus();
+        }
+      });
+
+      function toggleContext(forceHidden) {
+        const hidden =
+          typeof forceHidden === 'boolean'
+            ? forceHidden
+            : !appShell.classList.contains('context-hidden');
+        appShell.classList.toggle('context-hidden', hidden);
+        window.setTimeout(updateTrace, 260);
+      }
+
+      contextRailCollapse.addEventListener('click', () => {
+        toggleContext(true);
+        window.setTimeout(() => contextRailRestore.focus(), 180);
+      });
+      contextRailRestore.addEventListener('click', () => {
+        toggleContext(false);
+        window.setTimeout(() => contextRailCollapse.focus(), 180);
+      });
+
+      for (const button of panelButtons) {
+        button.addEventListener('click', () => setPanel(button.dataset.panelButton));
+      }
+
+      attachVisual.addEventListener('click', () => {
+        visualAttached = !visualAttached;
+        attachVisual.textContent = visualAttached ? 'Screenshot attached' : 'Attach screenshot';
+        attachVisual.setAttribute('aria-pressed', String(visualAttached));
+      });
+
+      annotationForm.addEventListener('submit', (event) => {
+        event.preventDefault();
+        const body = annotationBody.value.trim();
+        if (!body) {
+          annotationBody.focus();
+          showToast('Write what the Agent should understand before creating the Annotation.');
+          return;
+        }
+
+        const now = new Date().toLocaleTimeString('zh-CN', {
+          hour: '2-digit',
+          minute: '2-digit',
+        });
+        const definition = instanceDefinitions[currentInstanceKey];
+        definition.annotations.unshift({
+          id: `ann_${Date.now().toString(36).slice(-4).toUpperCase()}`,
+          status: 'open',
+          time: now,
+          body,
+          target: composerTarget.textContent,
+          visualAttachment: visualAttached ? 'Screenshot · current view' : null,
+        });
+        definition.openAnnotations += 1;
+        renderAnnotations(definition);
+
+        const nextCount = definition.openAnnotations;
+        annotationCount.textContent = String(definition.annotations.length);
+        openCount.textContent = String(nextCount);
+        annotationBody.value = '';
+        visualAttached = false;
+        attachVisual.textContent = 'Attach screenshot';
+        attachVisual.setAttribute('aria-pressed', 'false');
+        setPanel('annotations');
+        showToast('Annotation created · Target Snapshot saved at revision r18');
+      });
+
+      const resizeObserver = new ResizeObserver(updateTrace);
+      resizeObserver.observe(workbenchGrid);
+      resizeObserver.observe(artifactViewport);
+      resizeObserver.observe(targetCard);
+      window.addEventListener('resize', updateTrace);
+      window.addEventListener('load', updateTrace);
+      const requestedInstance = new URLSearchParams(window.location.search).get('instance');
+      const initialInstance = Object.hasOwn(instanceDefinitions, requestedInstance)
+        ? requestedInstance
+        : 'video';
+      if (window.matchMedia('(max-width: 1080px)').matches) toggleContext(true);
+      switchInstance(initialInstance, false);
+    </script>
+  </body>
+</html>

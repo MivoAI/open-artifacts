@@ -33,7 +33,9 @@ function sourceArtifactPackageCatalog(): Plugin {
           ) as WorkspacePackageManifest;
           return { directory: entry.name, manifest };
         })
-        .filter(({ manifest }) => manifest.openArtifacts?.format === 'react-render/v0')
+        .filter(({ manifest }) =>
+          ['react-render/v0', 'react-runtime/v1'].includes(manifest.openArtifacts?.format ?? ''),
+        )
         .sort((left, right) => left.directory.localeCompare(right.directory));
 
       const imports = artifactPackages.flatMap(({ manifest }, index) => {

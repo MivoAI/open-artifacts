@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { realpathSync } from 'node:fs';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -21,7 +22,9 @@ function cliProductionDependencyRoots() {
       (packageRoot) =>
         packageRoot !== repositoryRoot &&
         !packageRoot.endsWith('/node_modules/@open-artifacts/cli'),
-    );
+    )
+    .map((packageRoot) => realpathSync(packageRoot))
+    .filter((packageRoot, index, roots) => roots.indexOf(packageRoot) === index);
 }
 
 export async function createPackedCliFixture() {

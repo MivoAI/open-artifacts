@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://open-artifacts.dev/schemas/artifact-package/v0.json",
-  "title": "Open Artifacts Artifact Package manifest for react-render/v0",
+  "title": "Open Artifacts Artifact Package manifest formats",
   "type": "object",
   "required": ["name", "version", "type", "files", "exports", "openArtifacts", "peerDependencies"],
   "properties": {
@@ -24,6 +24,7 @@
       "required": [".", "./schema", "./example", "./package.json"],
       "properties": {
         ".": { "const": "./src/index.tsx" },
+        "./activate": { "const": "./src/activate.ts" },
         "./schema": { "const": "./input.schema.json" },
         "./example": { "const": "./example.json" },
         "./package.json": { "const": "./package.json" }
@@ -34,7 +35,7 @@
       "additionalProperties": false,
       "required": ["format"],
       "properties": {
-        "format": { "const": "react-render/v0" }
+        "format": { "enum": ["react-render/v0", "react-runtime/v1"] }
       }
     },
     "peerDependencies": {

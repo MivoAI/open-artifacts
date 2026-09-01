@@ -1,32 +1,23 @@
 {
   "project": {
     "name": "First light assembly",
-    "sequence": "OA / EDIT 001",
-    "status": "All changes local"
-  },
-  "agent": {
-    "eyebrow": "Agent + human workspace",
-    "title": "Shape a precise opening beat",
-    "summary": "Review the source clip, establish a confident first frame, and leave the timeline ready for a human adjustment.",
-    "tasks": [
-      "Inspect the visual rhythm and spoken opening",
-      "Keep the source clip intact for the first pass",
-      "Expose every active selection in the workspace"
-    ],
-    "composerPlaceholder": "Tell the agent what should change next…"
+    "sequence": "OA / EDIT 001"
   },
   "media": {
     "id": "demo-video",
     "title": "Studio opening",
     "kind": "H.264 + AAC",
-    "durationSeconds": 1.466667,
+    "durationUs": 1466667,
     "dimensions": "1280 × 856"
   },
   "timeline": {
+    "id": "opening-study",
     "title": "Opening study",
-    "trackLabel": "Picture 01"
+    "trackId": "video-1",
+    "trackLabel": "Picture 01",
+    "clipId": "opening-clip"
   },
-  "brief": {
+  "delivery": {
     "treatments": ["tighten-pacing"],
     "targetPlatform": "youtube-shorts",
     "aspectRatio": "16:9"

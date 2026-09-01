@@ -104,7 +104,7 @@ describe('local Artifact Package resolution', () => {
 
     await expect(
       resolveLocalArtifactPackage(fixture.artifactRoot, fixture.fixtureRoot),
-    ).rejects.toThrow(/does not satisfy react-render\/v0/);
+    ).rejects.toThrow(/does not satisfy a supported Open Artifacts contract/);
   });
 
   it('accepts a valid Input Contract without applying OA-internal strict lint rules', async () => {

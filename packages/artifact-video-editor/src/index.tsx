@@ -1,268 +1,210 @@
-import { useEffect, useRef, useState } from 'react';
-import type { ChangeEvent, KeyboardEvent } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { KeyboardEvent, RefObject } from 'react';
 
+import type { ArtifactRenderProps, DataBinding, OaSdk } from '@open-artifacts/sdk';
+import { useAnnotationTarget, useDataBinding } from '@open-artifacts/sdk/react';
+
+import { bindVideoProject } from './activate.ts';
+import { createInitialProject } from './model.ts';
 import type {
-  AgentBrief,
-  AspectRatio,
-  TargetPlatform,
+  VideoClip,
+  VideoClipRangeContext,
+  VideoClipRangeSelection,
+  VideoClipRangeSelector,
   VideoEditorInput,
-  VideoTreatment,
+  VideoProjectData,
 } from './model.ts';
 import './styles.css';
 
-export interface VideoEditorProps {
+type LegacyPreviewProps = {
   data: VideoEditorInput;
-}
+};
+
+export type VideoEditorProps = ArtifactRenderProps<VideoEditorInput> | LegacyPreviewProps;
 
 const demoVideoUrl = new URL('../assets/demo-h264.mp4', import.meta.url).href;
 const demoPosterUrl = new URL('../assets/demo-poster.jpg', import.meta.url).href;
 
-const treatmentLabels: Record<VideoTreatment, string> = {
-  'tighten-pacing': 'Tighten pacing',
-  captions: 'Captions',
-  'music-bed': 'Music bed',
-};
+export default function VideoEditor(props: VideoEditorProps) {
+  if ('oa' in props) {
+    return <BoundVideoEditor input={props.input} oa={props.oa} />;
+  }
 
-const platformLabels: Record<TargetPlatform, string> = {
-  tiktok: 'TikTok',
-  'instagram-reels': 'Instagram Reels',
-  'youtube-shorts': 'YouTube Shorts',
-};
-
-const treatments = Object.keys(treatmentLabels) as VideoTreatment[];
-
-function copyBrief(brief: AgentBrief): AgentBrief {
-  return { ...brief, treatments: [...brief.treatments] };
-}
-
-function briefsEqual(left: AgentBrief, right: AgentBrief) {
   return (
-    left.targetPlatform === right.targetPlatform &&
-    left.aspectRatio === right.aspectRatio &&
-    left.treatments.length === right.treatments.length &&
-    left.treatments.every((treatment) => right.treatments.includes(treatment))
+    <VideoEditorSurface
+      bindingState={{ revision: null, status: 'preview' }}
+      project={createInitialProject(props.data)}
+    />
   );
 }
 
-function formatTime(value: number) {
-  const seconds = Math.max(0, value);
-  const minutes = Math.floor(seconds / 60);
-  const remainder = seconds - minutes * 60;
-  return `${String(minutes).padStart(2, '0')}:${remainder.toFixed(2).padStart(5, '0')}`;
+function BoundVideoEditor({ input, oa }: ArtifactRenderProps<VideoEditorInput>) {
+  const binding = useMemo(() => bindVideoProject(oa, input), [input, oa]);
+  return <BoundVideoEditorSnapshot binding={binding} oa={oa} />;
 }
 
-export default function VideoEditor({ data }: VideoEditorProps) {
+function BoundVideoEditorSnapshot({
+  binding,
+  oa,
+}: {
+  binding: DataBinding<VideoProjectData>;
+  oa: OaSdk;
+}) {
+  const snapshot = useDataBinding(binding);
+  if (snapshot.status === 'loading') {
+    return (
+      <main aria-busy="true" className="oa-video-editor ve-empty" data-testid="video-loading">
+        Loading Instance Data…
+      </main>
+    );
+  }
+  return (
+    <VideoEditorSurface
+      bindingState={{ revision: snapshot.revision, status: snapshot.status }}
+      oa={oa}
+      project={snapshot.data}
+    />
+  );
+}
+
+function VideoEditorSurface({
+  bindingState,
+  oa,
+  project,
+}: {
+  bindingState: {
+    revision: string | null;
+    status: string;
+  };
+  oa?: OaSdk;
+  project: VideoProjectData;
+}) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const exportDialogRef = useRef<HTMLDialogElement>(null);
-  const exportTriggerRef = useRef<HTMLButtonElement>(null);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(data.media.durationSeconds);
+  const clip = project.timeline.tracks[0]?.clips[0];
+  if (!clip)
+    return <main className="oa-video-editor ve-empty">The timeline has no video clip.</main>;
+
+  return (
+    <VideoTimelineEditor
+      bindingState={bindingState}
+      clip={clip}
+      oa={oa}
+      project={project}
+      videoRef={videoRef}
+    />
+  );
+}
+
+function VideoTimelineEditor({
+  bindingState,
+  clip,
+  oa,
+  project,
+  videoRef,
+}: {
+  bindingState: {
+    revision: string | null;
+    status: string;
+  };
+  clip: VideoClip;
+  oa: OaSdk | undefined;
+  project: VideoProjectData;
+  videoRef: RefObject<HTMLVideoElement | null>;
+}) {
+  const [currentTimeUs, setCurrentTimeUs] = useState(clip.sourceRange.sourceStartUs);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [selectedMediaId, setSelectedMediaId] = useState<string | null>(null);
-  const [draftBrief, setDraftBrief] = useState(() => copyBrief(data.brief));
-  const [activeBrief, setActiveBrief] = useState(() => copyBrief(data.brief));
-  const [conversation, setConversation] = useState<AgentBrief[]>([]);
-  const [projectStatus, setProjectStatus] = useState(data.project.status);
-  const [exportOpen, setExportOpen] = useState(false);
+  const [selection, setSelection] = useState<VideoClipRangeSelection>(() => ({
+    clipId: clip.id,
+    ...clip.sourceRange,
+  }));
 
   useEffect(() => {
-    const dialog = exportDialogRef.current;
-    if (!dialog) return;
-
-    if (exportOpen && !dialog.open) dialog.showModal();
-    if (!exportOpen && dialog.open) dialog.close();
-  }, [exportOpen]);
-
-  const selectMedia = () => setSelectedMediaId(data.media.id);
-
-  const handleSelectionKeyDown = (event: KeyboardEvent<HTMLElement>) => {
-    if (event.key !== 'Enter' && event.key !== ' ') return;
-    event.preventDefault();
-    selectMedia();
-  };
+    setCurrentTimeUs((current) =>
+      clamp(current, clip.sourceRange.sourceStartUs, clip.sourceRange.sourceEndUs),
+    );
+    setSelection((current) => ({
+      clipId: clip.id,
+      sourceStartUs: clamp(
+        current.sourceStartUs,
+        clip.sourceRange.sourceStartUs,
+        clip.sourceRange.sourceEndUs - 1,
+      ),
+      sourceEndUs: clamp(
+        current.sourceEndUs,
+        clip.sourceRange.sourceStartUs + 1,
+        clip.sourceRange.sourceEndUs,
+      ),
+    }));
+  }, [clip.id, clip.sourceRange.sourceEndUs, clip.sourceRange.sourceStartUs]);
 
   const togglePlayback = async () => {
     const video = videoRef.current;
     if (!video) return;
-
+    if (
+      video.currentTime * 1_000_000 < clip.sourceRange.sourceStartUs ||
+      video.currentTime * 1_000_000 >= clip.sourceRange.sourceEndUs
+    ) {
+      video.currentTime = clip.sourceRange.sourceStartUs / 1_000_000;
+    }
     if (video.paused) await video.play();
     else video.pause();
   };
 
-  const scrub = (event: ChangeEvent<HTMLInputElement>) => {
-    const time = Number(event.currentTarget.value);
+  const scrub = (timeUs: number) => {
     const video = videoRef.current;
-    if (video) video.currentTime = time;
-    setCurrentTime(time);
+    if (video) video.currentTime = timeUs / 1_000_000;
+    setCurrentTimeUs(timeUs);
   };
 
-  const updateTreatment = (treatment: VideoTreatment, checked: boolean) => {
-    setDraftBrief((current) => ({
+  const markSelectionStart = () => {
+    setSelection((current) => ({
       ...current,
-      treatments: checked
-        ? [...current.treatments, treatment]
-        : current.treatments.filter((item) => item !== treatment),
+      clipId: clip.id,
+      sourceStartUs: Math.min(currentTimeUs, current.sourceEndUs - 1),
     }));
   };
 
-  const applyBrief = () => {
-    if (briefsEqual(draftBrief, activeBrief)) return;
-    const appliedBrief = copyBrief(draftBrief);
-    setActiveBrief(appliedBrief);
-    setConversation((current) => [...current, appliedBrief]);
-    setProjectStatus('Unexported changes');
+  const markSelectionEnd = () => {
+    setSelection((current) => ({
+      ...current,
+      clipId: clip.id,
+      sourceEndUs: Math.max(currentTimeUs, current.sourceStartUs + 1),
+    }));
   };
 
-  const selected = selectedMediaId === data.media.id;
-  const briefChanged = !briefsEqual(draftBrief, activeBrief);
-  const playheadPosition = duration > 0 ? `${(currentTime / duration) * 100}%` : '0%';
+  const clipLeft = '0%';
+  const clipWidth = `${
+    ((clip.sourceRange.sourceEndUs - clip.sourceRange.sourceStartUs) / project.media.durationUs) *
+    100
+  }%`;
+  const playheadLeft = `${
+    ((currentTimeUs - clip.sourceRange.sourceStartUs) / project.media.durationUs) * 100
+  }%`;
 
   return (
     <main className="oa-video-editor">
       <header className="ve-project-bar" data-testid="project-bar">
-        <div className="ve-brand" aria-label="Open Artifacts">
-          <span className="ve-brand-mark">OA</span>
-          <strong>Open Artifacts</strong>
+        <div>
+          <small>{project.project.sequence}</small>
+          <h1>{project.project.name}</h1>
         </div>
-        <div className="ve-project-identity">
-          <small>{data.project.sequence}</small>
-          <h1>{data.project.name}</h1>
-        </div>
-        <div className="ve-project-actions">
-          <span className="ve-save-state" data-testid="project-status">
-            {projectStatus}
-          </span>
-          <button type="button">Share review</button>
-          <button
-            className="ve-primary-action"
-            onClick={() => setExportOpen(true)}
-            ref={exportTriggerRef}
-            type="button"
-          >
-            Export draft
-          </button>
+        <div className="ve-authority-state">
+          <span>Instance Data</span>
+          <strong data-testid="project-status">{bindingState.status}</strong>
+          <code>{bindingState.revision ?? 'preview'}</code>
         </div>
       </header>
 
       <div className="ve-editor-grid">
-        <aside className="ve-agent-surface" data-testid="agent-surface">
-          <div className="ve-panel-heading">
-            <span className="ve-agent-dot" />
-            <div>
-              <small>{data.agent.eyebrow}</small>
-              <strong>Agent desk</strong>
-            </div>
-          </div>
-          <div className="ve-agent-body">
-            <div className="ve-agent-brief">
-              <span className="ve-brief-label">Working brief</span>
-              <h2>{data.agent.title}</h2>
-              <p>{data.agent.summary}</p>
-              <ol>
-                {data.agent.tasks.map((task, index) => (
-                  <li key={task}>
-                    <span>{String(index + 1).padStart(2, '0')}</span>
-                    {task}
-                  </li>
-                ))}
-              </ol>
-            </div>
-
-            <div aria-label="Conversation" className="ve-conversation">
-              {conversation.map((brief, index) => (
-                <article data-testid="conversation-summary" key={index}>
-                  <small>Applied brief {String(index + 1).padStart(2, '0')}</small>
-                  <strong>
-                    {brief.treatments.map((item) => treatmentLabels[item]).join(', ')}
-                  </strong>
-                  <span>
-                    {platformLabels[brief.targetPlatform]} · {brief.aspectRatio}
-                  </span>
-                </article>
-              ))}
-            </div>
-
-            <form
-              aria-label="Agent Brief"
-              className="ve-agent-composer"
-              onSubmit={(event) => {
-                event.preventDefault();
-                applyBrief();
-              }}
-            >
-              <span className="ve-brief-label">Artifact Input · Agent Brief</span>
-              <p>{data.agent.composerPlaceholder}</p>
-              <fieldset>
-                <legend>Treatments</legend>
-                {treatments.map((treatment) => (
-                  <label key={treatment}>
-                    <input
-                      checked={draftBrief.treatments.includes(treatment)}
-                      onChange={(event) => updateTreatment(treatment, event.currentTarget.checked)}
-                      type="checkbox"
-                    />
-                    {treatmentLabels[treatment]}
-                  </label>
-                ))}
-              </fieldset>
-              <label>
-                Target platform
-                <select
-                  onChange={(event) => {
-                    const targetPlatform = event.currentTarget.value as TargetPlatform;
-                    setDraftBrief((current) => ({ ...current, targetPlatform }));
-                  }}
-                  value={draftBrief.targetPlatform}
-                >
-                  <option value="tiktok">TikTok</option>
-                  <option value="instagram-reels">Instagram Reels</option>
-                  <option value="youtube-shorts">YouTube Shorts</option>
-                </select>
-              </label>
-              <label>
-                Aspect ratio
-                <select
-                  onChange={(event) => {
-                    const aspectRatio = event.currentTarget.value as AspectRatio;
-                    setDraftBrief((current) => ({ ...current, aspectRatio }));
-                  }}
-                  value={draftBrief.aspectRatio}
-                >
-                  <option value="9:16">9:16</option>
-                  <option value="1:1">1:1</option>
-                  <option value="16:9">16:9</option>
-                </select>
-              </label>
-              <button disabled={draftBrief.treatments.length === 0 || !briefChanged} type="submit">
-                Apply brief
-              </button>
-            </form>
-          </div>
-        </aside>
-
         <aside className="ve-media-library" data-testid="media-library">
-          <div className="ve-panel-heading ve-library-heading">
+          <div className="ve-panel-heading">
             <div>
-              <small>Project media</small>
-              <strong>Library</strong>
+              <small>Package media</small>
+              <strong>Source</strong>
             </div>
-            <button aria-label="Add media" type="button">
-              +
-            </button>
-          </div>
-          <div className="ve-library-tools">
             <span>1 asset</span>
-            <button type="button">Sort: recent</button>
           </div>
-          <div
-            aria-selected={selected}
-            className={`ve-media-card${selected ? ' is-selected' : ''}`}
-            data-testid={`media-card-${data.media.id}`}
-            onClick={selectMedia}
-            onKeyDown={handleSelectionKeyDown}
-            role="option"
-            tabIndex={0}
-          >
+          <article className="ve-media-card" data-testid={`media-card-${project.media.id}`}>
             <div className="ve-media-thumbnail">
               <video
                 aria-hidden="true"
@@ -271,18 +213,19 @@ export default function VideoEditor({ data }: VideoEditorProps) {
                 preload="metadata"
                 src={demoVideoUrl}
               />
-              <span>{formatTime(data.media.durationSeconds)}</span>
+              <span>{formatTimeUs(project.media.durationUs)}</span>
             </div>
-            <div className="ve-media-meta">
-              <strong>{data.media.title}</strong>
-              <span>
-                {data.media.kind} · {data.media.dimensions}
-              </span>
-            </div>
-          </div>
-          <div className="ve-library-footnote">
-            <span>Package-owned media</span>
-            <code>assets/demo-h264.mp4</code>
+            <strong>{project.media.title}</strong>
+            <span>
+              {project.media.kind} · {project.media.dimensions}
+            </span>
+          </article>
+          <div className="ve-delivery">
+            <small>Delivery</small>
+            <strong>
+              {project.delivery.targetPlatform} · {project.delivery.aspectRatio}
+            </strong>
+            <span>{project.delivery.treatments.join(' · ') || 'No treatments'}</span>
           </div>
         </aside>
 
@@ -291,24 +234,35 @@ export default function VideoEditor({ data }: VideoEditorProps) {
             <div className="ve-preview-heading">
               <div>
                 <small>Preview</small>
-                <strong>{data.timeline.title}</strong>
+                <strong>{project.timeline.title}</strong>
               </div>
-              <span>Fit · 100%</span>
+              <span>
+                {formatTimeUs(clip.sourceRange.sourceStartUs)}–
+                {formatTimeUs(clip.sourceRange.sourceEndUs)}
+              </span>
             </div>
             <div className="ve-video-shell">
               <div
                 className="ve-video-frame"
-                data-aspect-ratio={activeBrief.aspectRatio}
+                data-aspect-ratio={project.delivery.aspectRatio}
                 data-testid="preview-frame"
-                style={{ aspectRatio: activeBrief.aspectRatio.replace(':', ' / ') }}
+                style={{ aspectRatio: project.delivery.aspectRatio.replace(':', ' / ') }}
               >
                 <video
                   data-testid="preview-video"
-                  onDurationChange={(event) => setDuration(event.currentTarget.duration)}
                   onEnded={() => setIsPlaying(false)}
                   onPause={() => setIsPlaying(false)}
                   onPlay={() => setIsPlaying(true)}
-                  onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
+                  onTimeUpdate={(event) => {
+                    const nextTimeUs = Math.round(event.currentTarget.currentTime * 1_000_000);
+                    if (nextTimeUs >= clip.sourceRange.sourceEndUs) {
+                      event.currentTarget.pause();
+                      event.currentTarget.currentTime = clip.sourceRange.sourceEndUs / 1_000_000;
+                      setCurrentTimeUs(clip.sourceRange.sourceEndUs);
+                      return;
+                    }
+                    setCurrentTimeUs(nextTimeUs);
+                  }}
                   playsInline
                   poster={demoPosterUrl}
                   preload="auto"
@@ -318,7 +272,7 @@ export default function VideoEditor({ data }: VideoEditorProps) {
               </div>
             </div>
             <div className="ve-transport">
-              <span>{formatTime(currentTime)}</span>
+              <span>{formatTimeUs(currentTimeUs)}</span>
               <button
                 aria-label={isPlaying ? 'Pause preview' : 'Play preview'}
                 className="ve-play-toggle"
@@ -327,92 +281,150 @@ export default function VideoEditor({ data }: VideoEditorProps) {
               >
                 {isPlaying ? 'Ⅱ' : '▶'}
               </button>
-              <span>{formatTime(duration)}</span>
+              <span>{formatTimeUs(clip.sourceRange.sourceEndUs)}</span>
             </div>
           </div>
 
-          <div className="ve-timeline-panel" data-testid="timeline-surface">
-            <div className="ve-timeline-toolbar">
+          <section className="ve-timeline-panel" data-testid="timeline-surface">
+            <header className="ve-timeline-toolbar">
               <div>
-                <button type="button">Split</button>
-                <button type="button">Snap on</button>
+                <small>Authoritative timeline</small>
+                <strong>{project.timeline.tracks[0]?.label}</strong>
               </div>
-              <strong data-time={currentTime.toFixed(2)} data-testid="timeline-time">
-                {formatTime(currentTime)}
-              </strong>
-              <span>100%</span>
+              <code data-time-us={currentTimeUs} data-testid="timeline-time">
+                {formatTimeUs(currentTimeUs)}
+              </code>
+            </header>
+
+            <div className="ve-selection-toolbar">
+              <span>
+                Annotation range · {formatTimeUs(selection.sourceStartUs)}–
+                {formatTimeUs(selection.sourceEndUs)}
+              </span>
+              <div>
+                <button onClick={markSelectionStart} type="button">
+                  Mark start
+                </button>
+                <button onClick={markSelectionEnd} type="button">
+                  Mark end
+                </button>
+              </div>
             </div>
-            <div className="ve-ruler" aria-hidden="true">
-              <span>00:00</span>
-              <span>00:00.50</span>
-              <span>00:01.00</span>
-              <span>00:01.47</span>
-            </div>
+
             <div className="ve-timeline-canvas">
               <div className="ve-track-label">
                 <span>V1</span>
-                <strong>{data.timeline.trackLabel}</strong>
+                <strong>{project.timeline.tracks[0]?.label}</strong>
               </div>
               <div className="ve-track-lane">
-                <div
-                  aria-selected={selected}
-                  className={`ve-timeline-clip${selected ? ' is-selected' : ''}`}
-                  data-testid={`timeline-clip-${data.media.id}`}
-                  onClick={selectMedia}
-                  onKeyDown={handleSelectionKeyDown}
-                  role="option"
-                  tabIndex={0}
-                >
-                  <div className="ve-clip-filmstrip" />
-                  <strong>{data.media.title}</strong>
-                  <span>{data.media.kind}</span>
-                </div>
+                {oa ? (
+                  <TargetableClip
+                    clip={clip}
+                    left={clipLeft}
+                    oa={oa}
+                    selection={selection}
+                    width={clipWidth}
+                  />
+                ) : (
+                  <StaticClip clip={clip} left={clipLeft} width={clipWidth} />
+                )}
                 <div
                   className="ve-playhead"
                   data-testid="timeline-playhead"
-                  style={{ left: playheadPosition }}
+                  style={{ left: playheadLeft }}
                 >
                   <span />
                 </div>
                 <input
                   aria-label="Timeline scrubber"
                   className="ve-scrubber"
-                  max={duration}
-                  min="0"
-                  onChange={scrub}
-                  step="0.01"
+                  max={clip.sourceRange.sourceEndUs}
+                  min={clip.sourceRange.sourceStartUs}
+                  onChange={(event) => scrub(Number(event.currentTarget.value))}
+                  step="1000"
                   type="range"
-                  value={currentTime}
+                  value={currentTimeUs}
                 />
-                <ul aria-label="Applied treatment tracks" data-testid="treatment-tracks">
-                  {activeBrief.treatments.map((treatment) => (
-                    <li key={treatment}>{treatmentLabels[treatment]}</li>
-                  ))}
-                </ul>
               </div>
             </div>
-          </div>
+          </section>
         </section>
       </div>
-      <dialog
-        aria-label="Export summary"
-        className="ve-export-dialog"
-        onClose={() => {
-          setExportOpen(false);
-          exportTriggerRef.current?.focus();
-        }}
-        ref={exportDialogRef}
-      >
-        <span className="ve-brief-label">Simulation only</span>
-        <h2>Export summary</h2>
-        <strong>
-          {platformLabels[activeBrief.targetPlatform]} · {activeBrief.aspectRatio}
-        </strong>
-        <p>{activeBrief.treatments.map((item) => treatmentLabels[item]).join(', ')}</p>
-        <button onClick={() => setExportOpen(false)} type="button">
-          Close summary
-        </button>
-      </dialog>
     </main>
   );
+}
+
+function TargetableClip({
+  clip,
+  left,
+  oa,
+  selection,
+  width,
+}: {
+  clip: VideoClip;
+  left: string;
+  oa: OaSdk;
+  selection: VideoClipRangeSelection;
+  width: string;
+}) {
+  const target = useAnnotationTarget<
+    VideoClipRangeSelection,
+    VideoClipRangeSelector,
+    VideoClipRangeContext
+  >({
+    oa,
+    provider: 'video.clip-range',
+    selection,
+  });
+
+  return (
+    <button
+      {...target.props}
+      aria-label={`Select ${clip.title} annotation range`}
+      className="ve-timeline-clip"
+      data-source-end-us={clip.sourceRange.sourceEndUs}
+      data-source-start-us={clip.sourceRange.sourceStartUs}
+      data-testid={`timeline-clip-${clip.id}`}
+      onClick={() => void target.select(selection, 'selection')}
+      style={{ left, width }}
+      type="button"
+    >
+      <span className="ve-clip-filmstrip" />
+      <strong>{clip.title}</strong>
+      <small>
+        {formatTimeUs(selection.sourceStartUs)}–{formatTimeUs(selection.sourceEndUs)}
+      </small>
+    </button>
+  );
+}
+
+function StaticClip({ clip, left, width }: { clip: VideoClip; left: string; width: string }) {
+  const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+    if (event.key === 'Enter' || event.key === ' ') event.currentTarget.click();
+  };
+  return (
+    <button
+      className="ve-timeline-clip"
+      data-source-end-us={clip.sourceRange.sourceEndUs}
+      data-source-start-us={clip.sourceRange.sourceStartUs}
+      data-testid={`timeline-clip-${clip.id}`}
+      onKeyDown={handleKeyDown}
+      style={{ left, width }}
+      type="button"
+    >
+      <span className="ve-clip-filmstrip" />
+      <strong>{clip.title}</strong>
+    </button>
+  );
+}
+
+function clamp(value: number, minimum: number, maximum: number) {
+  return Math.min(Math.max(value, minimum), maximum);
+}
+
+function formatTimeUs(value: number) {
+  const seconds = Math.max(0, value) / 1_000_000;
+  const minutes = Math.floor(seconds / 60);
+  const remainder = seconds - minutes * 60;
+  return `${String(minutes).padStart(2, '0')}:${remainder.toFixed(3).padStart(6, '0')}`;
 }

@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "module": "packages/artifact-markdown-editor",
+  "command": "npm run test",
+  "status": "measured",
+  "files": 4,
+  "coverage": {
+    "statements": {
+      "covered": 464,
+      "pct": 62.28,
+      "total": 745
+    },
+    "branches": {
+      "covered": 81,
+      "pct": 81.82,
+      "total": 99
+    },
+    "functions": {
+      "covered": 20,
+      "pct": 76.92,
+      "total": 26
+    },
+    "lines": {
+      "covered": 464,
+      "pct": 62.28,
+      "total": 745
+    }
+  }
+}

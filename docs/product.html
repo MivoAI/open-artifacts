@@ -1,0 +1,1676 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Open Artifacts 产品模型：Human、Agent 与 OA Daemon、CLI、SDK、Inspector、Package、Instance 之间的泳道时序图。"
+    />
+    <title>Open Artifacts · 角色时序</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Outfit:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        color-scheme: light;
+        --paper: #f3f6f3;
+        --ink: #17231f;
+        --ink-soft: #5b685f;
+        --line: #c7d2ca;
+        --human: #0f6e56;
+        --oa: #1f5f8a;
+        --artifact: #6b3d8f;
+        --agent: #9a3f12;
+        --oa-entry: var(--oa);
+        --platform: var(--artifact);
+        --package: var(--artifact);
+        --sdk: var(--oa);
+        --inspector: var(--oa);
+        --daemon: var(--oa);
+        --data: var(--artifact);
+        --annotation: var(--artifact);
+        --cli: var(--oa);
+        --shadow: 0 18px 50px rgb(23 35 31 / 8%);
+        --radius: 18px;
+        font-family: Outfit, ui-sans-serif, sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        min-width: 320px;
+        background:
+          radial-gradient(circle at 1px 1px, rgb(47 74 110 / 10%) 1px, transparent 0) 0 0 / 24px
+            24px,
+          var(--paper);
+        color: var(--ink);
+      }
+
+      button,
+      a {
+        color: inherit;
+        font: inherit;
+      }
+
+      :focus-visible {
+        outline: 3px solid rgb(15 110 86 / 28%);
+        outline-offset: 3px;
+      }
+
+      .mono,
+      code {
+        font-family: 'IBM Plex Mono', ui-monospace, monospace;
+      }
+
+      .shell {
+        width: min(1300px, calc(100% - 28px));
+        margin: 14px auto 64px;
+      }
+
+      .topbar {
+        position: sticky;
+        top: 10px;
+        z-index: 30;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 12px 16px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: rgb(243 246 243 / 90%);
+        backdrop-filter: blur(12px);
+        box-shadow: var(--shadow);
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        text-decoration: none;
+      }
+
+      .brand-mark {
+        display: grid;
+        place-items: center;
+        width: 34px;
+        height: 34px;
+        border-radius: 11px;
+        background: #1f3d2f;
+        color: white;
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      .brand strong {
+        display: block;
+        font-size: 14px;
+      }
+
+      .brand span {
+        display: block;
+        color: var(--ink-soft);
+        font-size: 11px;
+      }
+
+      .topnav {
+        display: flex;
+        gap: 4px;
+      }
+
+      .topnav a {
+        padding: 8px 12px;
+        border-radius: 999px;
+        color: var(--ink-soft);
+        text-decoration: none;
+        font-size: 13px;
+      }
+
+      .topnav a[aria-current='page'],
+      .topnav a:hover {
+        background: white;
+        color: var(--ink);
+      }
+
+      .page-state {
+        color: var(--ink-soft);
+        font-size: 11px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      main {
+        display: grid;
+        gap: 18px;
+        margin-top: 18px;
+      }
+
+      .panel {
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: white;
+        box-shadow: var(--shadow);
+      }
+
+      .hero {
+        display: grid;
+        gap: 16px;
+        padding: 36px 32px 28px;
+      }
+
+      .eyebrow {
+        margin: 0;
+        color: var(--cli);
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        margin: 0;
+        max-width: 18ch;
+        font-size: clamp(34px, 5.2vw, 56px);
+        font-weight: 700;
+        letter-spacing: -0.045em;
+        line-height: 1.03;
+      }
+
+      .hero > p {
+        margin: 0;
+        max-width: 60ch;
+        color: var(--ink-soft);
+        font-size: 16px;
+        line-height: 1.7;
+      }
+
+      .legend {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .legend article {
+        padding: 14px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: #f8faf8;
+      }
+
+      .legend strong {
+        display: block;
+        margin-bottom: 6px;
+        font-size: 13px;
+      }
+
+      .legend span {
+        color: var(--ink-soft);
+        font-size: 12px;
+        line-height: 1.55;
+      }
+
+      .section-head {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        gap: 18px;
+        padding: 26px 26px 0;
+      }
+
+      .section-head h2 {
+        margin: 8px 0 0;
+        font-size: clamp(26px, 3.6vw, 34px);
+        letter-spacing: -0.04em;
+      }
+
+      .section-head p {
+        margin: 0;
+        max-width: 42ch;
+        color: var(--ink-soft);
+        font-size: 14px;
+        line-height: 1.65;
+      }
+
+      .roles {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1.5fr;
+        gap: 12px;
+        padding: 20px 26px 26px;
+      }
+
+      .role {
+        padding: 18px;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+      }
+
+      .role[data-role='human'] {
+        background: linear-gradient(180deg, #e3f3ec, white 50%);
+      }
+
+      .role[data-role='agent'] {
+        background: linear-gradient(180deg, #f8ebe3, white 50%);
+      }
+
+      .role[data-role='oa'] {
+        background: linear-gradient(180deg, #f5e7f1, white 50%);
+      }
+
+      .role-label {
+        margin-bottom: 10px;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .role[data-role='human'] .role-label {
+        color: var(--human);
+      }
+
+      .role[data-role='agent'] .role-label {
+        color: var(--agent);
+      }
+
+      .role[data-role='oa'] .role-label {
+        color: var(--daemon);
+      }
+
+      .role h3 {
+        margin: 0 0 8px;
+        font-size: 22px;
+        letter-spacing: -0.03em;
+      }
+
+      .role p {
+        margin: 0;
+        color: var(--ink-soft);
+        font-size: 13px;
+        line-height: 1.6;
+      }
+
+      .role-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 14px;
+      }
+
+      .role-chips span {
+        padding: 4px 8px;
+        border-radius: 999px;
+        background: white;
+        border: 1px solid var(--line);
+        font-size: 11px;
+      }
+
+      .role-chips span.core {
+        border-color: var(--daemon);
+        color: var(--daemon);
+        font-weight: 600;
+      }
+
+      .scenario-bar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 18px 26px 0;
+      }
+
+      .scenario-button {
+        max-width: 100%;
+        padding: 10px 12px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: white;
+        text-align: left;
+        cursor: pointer;
+      }
+
+      .scenario-button small {
+        display: block;
+        margin-bottom: 4px;
+        color: var(--ink-soft);
+        font-size: 10px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      .scenario-button strong {
+        display: block;
+        font-size: 13px;
+        line-height: 1.4;
+      }
+
+      .scenario-button[aria-pressed='true'] {
+        border-color: #1f3d2f;
+        background: #1f3d2f;
+        color: white;
+      }
+
+      .scenario-button[aria-pressed='true'] small {
+        color: rgb(255 255 255 / 68%);
+      }
+
+      .sequence-wrap {
+        padding: 18px 18px 8px;
+        overflow-x: auto;
+      }
+
+      .sequence-card {
+        min-width: 1180px;
+        padding: 18px;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: #fbfcfb;
+      }
+
+      .sequence-title {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 12px;
+      }
+
+      .sequence-title h3 {
+        margin: 0;
+        font-size: 18px;
+        letter-spacing: -0.02em;
+      }
+
+      .sequence-title p {
+        margin: 0;
+        max-width: 58ch;
+        color: var(--ink-soft);
+        font-size: 13px;
+        line-height: 1.55;
+      }
+
+      #sequence-svg {
+        display: block;
+        width: 100%;
+        height: auto;
+      }
+
+      .lane-label {
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      .lane-sub {
+        font-size: 9.5px;
+        fill: var(--ink-soft);
+      }
+
+      .lane-header {
+        cursor: help;
+      }
+
+      .lane-tips {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+        margin-top: 14px;
+        padding-top: 14px;
+        border-top: 1px dashed var(--line);
+      }
+
+      .lane-tip {
+        padding: 10px 12px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: white;
+      }
+
+      .lane-tip strong {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 4px;
+        font-size: 12px;
+      }
+
+      .lane-tip strong::before {
+        content: '';
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        background: var(--tip-color, var(--ink-soft));
+        flex: none;
+      }
+
+      .lane-tip span {
+        color: var(--ink-soft);
+        font-size: 11px;
+        line-height: 1.5;
+      }
+
+      .lane-tip[data-active='true'] {
+        border-color: var(--tip-color, #1f3d2f);
+        box-shadow: inset 0 0 0 1px var(--tip-color, #1f3d2f);
+      }
+
+      .msg-label {
+        font-size: 11px;
+        fill: var(--ink);
+      }
+
+      .msg-sub {
+        font-size: 9.5px;
+        fill: var(--ink-soft);
+      }
+
+      .caption {
+        margin: 8px 26px 26px;
+        padding: 16px 18px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: #eef3ef;
+      }
+
+      .caption small {
+        display: block;
+        margin-bottom: 6px;
+        color: #1f3d2f;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      .caption p {
+        margin: 0;
+        color: var(--ink-soft);
+        font-size: 14px;
+        line-height: 1.7;
+      }
+
+      .rules {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        padding: 20px 26px 26px;
+      }
+
+      .rule {
+        padding: 16px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+      }
+
+      .rule strong {
+        display: block;
+        margin-bottom: 8px;
+        font-size: 14px;
+      }
+
+      .rule span {
+        color: var(--ink-soft);
+        font-size: 13px;
+        line-height: 1.6;
+      }
+
+      .page-footer {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 8px 8px 0;
+        color: var(--ink-soft);
+        font-size: 12px;
+      }
+
+      .page-footer a {
+        color: var(--cli);
+        text-decoration: none;
+      }
+
+      @media (max-width: 960px) {
+        .topnav,
+        .page-state {
+          display: none;
+        }
+
+        .legend,
+        .roles,
+        .rules,
+        .lane-tips {
+          grid-template-columns: 1fr;
+        }
+
+        .section-head {
+          align-items: start;
+          flex-direction: column;
+        }
+
+        .hero,
+        .section-head,
+        .roles,
+        .scenario-bar,
+        .rules {
+          padding-inline: 18px;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        html {
+          scroll-behavior: auto;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <header class="topbar">
+        <a class="brand" href="product.html">
+          <span class="brand-mark" aria-hidden="true">OA</span>
+          <span>
+            <strong>Open Artifacts</strong>
+            <span>角色时序</span>
+          </span>
+        </a>
+        <nav class="topnav" aria-label="页面导航">
+          <a href="product.html" aria-current="page">产品</a>
+          <a href="#roles">角色</a>
+          <a href="#flow">时序</a>
+          <a href="architecture.html">架构</a>
+        </nav>
+        <span class="page-state mono">Working model · 2026.07.26</span>
+      </header>
+
+      <main>
+        <section class="panel hero" aria-labelledby="hero-title">
+          <p class="eyebrow">Product model</p>
+          <h1 id="hero-title">用泳道时序图看清角色怎么协作</h1>
+          <p>
+            外部角色只有 Human 与 Agent。OA 的核心是常驻的 OA Daemon，管理所有 Artifact
+            的生命周期与持久化；OA Interface（CLI / Remote MCP）、SDK、OA Workbench
+            只是入口，Package 提供 UI 与 Tool，Instance 保存 Data 与
+            Annotation。下面按八组、十一条场景路径看消息怎么走。
+          </p>
+          <div class="legend" aria-label="泳道颜色与 scope 分类">
+            <article>
+              <strong style="color: var(--human)">① Human</strong>
+              <span>人：验收与直接操作</span>
+            </article>
+            <article>
+              <strong style="color: var(--oa)">② OA</strong>
+              <span>Workbench · SDK · OA Interface（CLI / Remote MCP）· Daemon</span>
+            </article>
+            <article>
+              <strong style="color: var(--artifact)">③ Artifact</strong>
+              <span>Package · Artifact UI · Data · Annotation（同色、相邻）</span>
+            </article>
+            <article>
+              <strong style="color: var(--agent)">④ Agent</strong>
+              <span>外部智能体：经 OA Interface（本地 CLI 或云端 Remote MCP）进入</span>
+            </article>
+          </div>
+        </section>
+
+        <section class="panel" id="roles" aria-labelledby="roles-title">
+          <header class="section-head">
+            <div>
+              <p class="eyebrow">Roles</p>
+              <h2 id="roles-title">谁在泳道里</h2>
+            </div>
+            <p>
+              泳道按 scope 相邻排列：Human → OA（Workbench / SDK / Interface / Daemon）→
+              Artifact（Package / UI / Data / Annotation）→ Agent。Agent
+              入口假定有两种调用形式：本地
+              <strong>OA CLI</strong> 与云端 <strong>OA Remote MCP</strong>，都转发到同一 Daemon。
+            </p>
+          </header>
+          <div class="roles">
+            <article class="role" data-role="human">
+              <div class="role-label">External</div>
+              <h3>Human</h3>
+              <p>指出问题、直接改内容、验收结果。只碰 Artifact UI 与 OA Workbench。</p>
+            </article>
+            <article class="role" data-role="agent">
+              <div class="role-label">External</div>
+              <h3>Agent</h3>
+              <p>
+                运行时交互经 OA Interface（本地 CLI 或云端 Remote MCP）。默认调
+                Tool；能力不足时直读写 Data。本地 Agent 还可以修改新的 Package，再让同一个 Instance
+                切换 Package Binding。
+              </p>
+            </article>
+            <article class="role" data-role="oa">
+              <div class="role-label">Platform</div>
+              <h3>OA</h3>
+              <p>
+                核心是常驻的 <strong>OA Daemon</strong>：管理所有 Artifact 的生命周期，持有 Data
+                Authority 与 Annotation Store，路由 Tool 调用；Workbench / SDK / OA Interface（CLI ·
+                Remote MCP）都是它的入口。不解释业务。
+              </p>
+              <div class="role-chips">
+                <span class="core">OA Daemon</span>
+                <span>OA SDK</span>
+                <span>OA Workbench</span>
+                <span>OA CLI</span>
+                <span>OA Remote MCP</span>
+                <span>Data Authority</span>
+                <span>Annotation Store</span>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="panel" id="flow" aria-labelledby="flow-title">
+          <header class="section-head">
+            <div>
+              <p class="eyebrow">Sequence</p>
+              <h2 id="flow-title">八组、十一条场景路径</h2>
+            </div>
+            <p>
+              同一套泳道，按 scope 成块排列。场景从简单到复杂：人直接改 → Agent 读写 → 标注协作 →
+              能力演进。
+            </p>
+          </header>
+
+          <div class="scenario-bar" role="tablist" aria-label="交互场景">
+            <button
+              class="scenario-button"
+              type="button"
+              role="tab"
+              data-scenario="s0"
+              aria-selected="true"
+              aria-pressed="true"
+            >
+              <small>场景 0</small>
+              <strong>Human 直接改 Data</strong>
+            </button>
+            <button
+              class="scenario-button"
+              type="button"
+              role="tab"
+              data-scenario="s1"
+              aria-selected="false"
+              aria-pressed="false"
+            >
+              <small>场景 1</small>
+              <strong>Agent 通过 Tool 读取领域视图</strong>
+            </button>
+            <button
+              class="scenario-button"
+              type="button"
+              role="tab"
+              data-scenario="s2"
+              aria-selected="false"
+              aria-pressed="false"
+            >
+              <small>场景 2</small>
+              <strong>Agent 通过 Data API 读取 Data</strong>
+            </button>
+            <button
+              class="scenario-button"
+              type="button"
+              role="tab"
+              data-scenario="s2w"
+              aria-selected="false"
+              aria-pressed="false"
+            >
+              <small>场景 2B</small>
+              <strong>Agent 通过 Data API 修改 Data</strong>
+            </button>
+            <button
+              class="scenario-button"
+              type="button"
+              role="tab"
+              data-scenario="s3"
+              aria-selected="false"
+              aria-pressed="false"
+            >
+              <small>场景 3</small>
+              <strong>Agent 调 Tool 改 Data</strong>
+            </button>
+            <button
+              class="scenario-button"
+              type="button"
+              role="tab"
+              data-scenario="s4"
+              aria-selected="false"
+              aria-pressed="false"
+            >
+              <small>场景 4</small>
+              <strong>Package 自定义标注 → Agent 执行</strong>
+            </button>
+            <button
+              class="scenario-button"
+              type="button"
+              role="tab"
+              data-scenario="s5"
+              aria-selected="false"
+              aria-pressed="false"
+            >
+              <small>场景 5</small>
+              <strong>Workbench Inspector 标注 → Agent 执行</strong>
+            </button>
+            <button
+              class="scenario-button"
+              type="button"
+              role="tab"
+              data-scenario="s6a"
+              aria-selected="false"
+              aria-pressed="false"
+            >
+              <small>场景 6A</small>
+              <strong>Human 批准 Agent 提案</strong>
+            </button>
+            <button
+              class="scenario-button"
+              type="button"
+              role="tab"
+              data-scenario="s6b"
+              aria-selected="false"
+              aria-pressed="false"
+            >
+              <small>场景 6B</small>
+              <strong>Human 拒绝 Agent 提案</strong>
+            </button>
+            <button
+              class="scenario-button"
+              type="button"
+              role="tab"
+              data-scenario="s6c"
+              aria-selected="false"
+              aria-pressed="false"
+            >
+              <small>场景 6C</small>
+              <strong>Human 要求 Agent 修改提案</strong>
+            </button>
+            <button
+              class="scenario-button"
+              type="button"
+              role="tab"
+              data-scenario="s7"
+              aria-selected="false"
+              aria-pressed="false"
+            >
+              <small>场景 7</small>
+              <strong>同一 Instance 切换到新 Package</strong>
+            </button>
+          </div>
+
+          <div class="sequence-wrap">
+            <div class="sequence-card">
+              <div class="sequence-title">
+                <h3 id="seq-title"></h3>
+                <p id="seq-desc"></p>
+              </div>
+              <svg id="sequence-svg" role="img" aria-label="角色泳道时序图"></svg>
+              <div class="lane-tips" id="lane-tips" aria-label="泳道角色说明"></div>
+            </div>
+          </div>
+
+          <aside class="caption" aria-live="polite">
+            <small id="scenario-label">场景 0</small>
+            <p id="scenario-copy"></p>
+          </aside>
+        </section>
+
+        <section class="panel" aria-labelledby="rules-title">
+          <header class="section-head">
+            <div>
+              <p class="eyebrow">Boundaries</p>
+              <h2 id="rules-title">读图时钉死的边界</h2>
+            </div>
+            <p>箭头方向比模块名更重要。</p>
+          </header>
+          <div class="rules">
+            <article class="rule">
+              <strong>OA Daemon 是中枢</strong>
+              <span
+                >OA Interface（CLI / Remote MCP）、SDK、OA Workbench 只是入口；生命周期、Data
+                Authority、Annotation Store 都在 Daemon。</span
+              >
+            </article>
+            <article class="rule">
+              <strong>Agent 两种调用形式</strong>
+              <span
+                >本地 Agent 走 OA CLI；云端 Agent 走 OA Remote MCP，可操作远端 OA
+                内容。二者都是转发适配器，语义相同，最终汇到同一 Daemon。图中 OA Interface
+                泳道代表这两种形式。</span
+              >
+            </article>
+            <article class="rule">
+              <strong>两条写 Data 的路，同一个权威提交</strong>
+              <span
+                >Artifact UI / Tool Handler 经注入的 OA SDK 写当前 Instance，不传 instanceId； Agent
+                默认经 Tool，能力不足才经 OA Interface 的 Data API，并显式指定 instanceId。
+                两者最终都由 Daemon 校验与提交。</span
+              >
+            </article>
+            <article class="rule">
+              <strong>两条读 Data 的路</strong>
+              <span
+                >场景 1 用 timeline.inspect 获得 Package 定义的领域视图；场景 2 在 Tool 能力不足时经
+                Data API 读取原始 Data。两者都由 Daemon 访问权威 Data，并经 OA Interface 返回
+                Agent。</span
+              >
+            </article>
+            <article class="rule">
+              <strong>SDK Binding 让 UI 收敛，不整页刷新</strong>
+              <span
+                >每次成功提交都产生新的 Instance revision 与 change event。OA SDK 提供开箱即用的状态
+                / 数据绑定，让 Artifact UI 按 revision 重读或更新投影；
+                具体使用事件流、轮询还是前端状态库留到工程设计阶段。</span
+              >
+            </article>
+            <article class="rule">
+              <strong>Annotation 不是执行</strong>
+              <span
+                >所有 Annotation 写操作都返回 {annotationId, revision, status} 并产生 change
+                event。执行前必须在当前 Data 上 resolveTarget；Tool 成功先记录证据并标为
+                applied，验证通过或 Human 验收后才 resolved，失败保持 open。</span
+              >
+            </article>
+            <article class="rule">
+              <strong>场景 1 展示一次通用前置检查</strong>
+              <span
+                >Agent 首次调用先检查 Instance 状态并 tools.list；可能返回 TOOL_NOT_FOUND、
+                INPUT_INVALID、INSTANCE_STOPPED、INSTANCE_ARCHIVED 或 Handler 失败。后续场景默认
+                已完成相同检查，不重复画出。</span
+              >
+            </article>
+            <article class="rule">
+              <strong>Daemon 管幂等，Git 记录 revision</strong>
+              <span
+                >Agent mutation 携带 baseRevision 与 idempotencyKey；Daemon 保证重复请求只生效一次，
+                并把成功的 Data 提交记录为 Git revision。SDK 调用由 Runtime 限定当前 Instance，
+                不要求 Package 传 instanceId。</span
+              >
+            </article>
+            <article class="rule">
+              <strong>改 Data ≠ 换 Package</strong>
+              <span
+                >场景 0、2B、3、4、5、6A 改的是 Instance Data；场景 7 保留同一个 instanceId、Data 与
+                Annotations，只替换 Package Binding 并启动新的 Runtime。云端 Agent 暂时不能访问本地
+                Package 源码，这是等待统一文件系统抽象解决的已知限制。</span
+              >
+            </article>
+          </div>
+        </section>
+      </main>
+
+      <footer class="page-footer">
+        <span>Open Artifacts · 泳道时序 · Working draft</span>
+        <a href="architecture.html">技术架构稍后对齐 →</a>
+      </footer>
+    </div>
+
+    <script>
+      const lanes = [
+        {
+          key: 'human',
+          label: 'Human',
+          sub: '外部角色',
+          group: 'human',
+          color: '#0f6e56',
+          tip: '人：通过 Artifact UI 与 OA Workbench 指出问题、直接改内容、验收结果；也可在 Workbench Annotation 线程回复 Agent 的 review 提问。',
+        },
+        {
+          key: 'workbench',
+          label: 'OA Workbench',
+          sub: '含 Inspector',
+          group: 'oa',
+          color: '#1f5f8a',
+          tip: 'OA 的浏览器外壳面板；在 Artifact UI 之外提供 DOM Inspector 兜底 Selection，以及 Annotation 线程（人可读 Agent 提问并回复判断）。',
+        },
+        {
+          key: 'sdk',
+          label: 'OA SDK',
+          sub: '注入 Runtime',
+          group: 'oa',
+          color: '#1f5f8a',
+          tip: '注入到 Artifact Runtime 的程序化 API；自动限定当前 Instance，因此 Artifact UI / Tool Handler 调用时不传 instanceId。SDK 还提供按 revision 同步 UI 状态与 Data 的开箱即用 Binding。',
+        },
+        {
+          key: 'cli',
+          label: 'OA Interface',
+          sub: 'OA CLI / OA Remote MCP',
+          group: 'oa',
+          color: '#1f5f8a',
+          tip: 'Agent 调用入口的两种 Adapter：本地 OA CLI，或云端 OA Remote MCP。请求显式指定 instanceId，并转发到 Daemon；Remote MCP 暂不能直接访问 OA 主机上的本地 Package 源码。',
+        },
+        {
+          key: 'daemon',
+          label: 'OA Daemon',
+          sub: '管理中枢',
+          group: 'oa',
+          color: '#1f5f8a',
+          tip: '常驻管理中枢：Instance 生命周期与 Package Binding、Data Authority、Annotation Store、Tool 路由、幂等和 Git revision；Workbench / SDK / OA Interface 的最终汇聚点。',
+        },
+        {
+          key: 'pkg',
+          label: 'Package',
+          sub: 'artifact package',
+          group: 'artifact',
+          color: '#6b3d8f',
+          tip: 'Artifact 的静态形态：有版本的源码定义，声明 Artifact UI、Input Contract 与 Tool；本地 Agent 可维护新版本，并让原 Instance 显式切换 Package Binding。',
+        },
+        {
+          key: 'ui',
+          label: 'Artifact UI',
+          sub: 'artifact instance',
+          group: 'artifact',
+          color: '#6b3d8f',
+          tip: '归属具体 Instance 的可交互界面；由 Package 定义，运行时呈现 Data，并通过 SDK Binding 跟随权威 revision 更新。',
+        },
+        {
+          key: 'data',
+          label: 'Data',
+          sub: 'artifact instance',
+          group: 'artifact',
+          color: '#6b3d8f',
+          tip: '归属具体 Instance 的持久化工作数据；权威由 Daemon 持有，UI 只是它的可视化。',
+        },
+        {
+          key: 'annotation',
+          label: 'Annotation',
+          sub: 'artifact instance',
+          group: 'artifact',
+          color: '#6b3d8f',
+          tip: '归属具体 Instance 的人机协作标注；携带 Target 与历史 Snapshot。本身不执行变更；执行前重新定位，成功先 applied，验证或验收后才 resolved。',
+        },
+        {
+          key: 'agent',
+          label: 'Agent',
+          sub: '外部角色',
+          group: 'agent',
+          color: '#9a3f12',
+          tip: '外部智能体：经 OA Interface（本地 CLI 或云端 Remote MCP）显式选择 Instance；本地 Agent 可用自己的文件工具维护 Package，云端 Agent 暂无统一的本地源码访问能力。',
+        },
+      ];
+
+      const laneIndex = Object.fromEntries(lanes.map((l, i) => [l.key, i]));
+
+      const scenarios = {
+        s0: {
+          label: '场景 0',
+          title: '场景 0 · Human 直接改 Data',
+          desc: '人不经过 Agent。Artifact UI 使用自动绑定当前 Instance 的 OA SDK 提交修改；Daemon 产生 Git revision，SDK Binding 让 UI 收敛。',
+          copy: 'Package 不传 instanceId 或 baseRevision。Runtime 已把 SDK 限定在当前 Instance；Binding 自动附加当前 baseRevision 与幂等上下文，Daemon 负责校验与 Git revision。成功后 SDK Binding 按 change event 更新 UI，不需要整页刷新。',
+          messages: [
+            { from: 'human', to: 'ui', label: '在编辑器输入文字' },
+            {
+              from: 'ui',
+              to: 'sdk',
+              label: 'binding.update(change)',
+              sub: 'SDK 自动附加 baseRevision',
+            },
+            { from: 'sdk', to: 'daemon', label: '提交 mutation', sub: 'SDK 生成幂等上下文' },
+            { from: 'daemon', to: 'data', label: '校验并 Git commit', sub: '产生新 revision' },
+            { from: 'daemon', to: 'sdk', label: '返回 {revision, status}', dashed: true },
+            { from: 'daemon', to: 'sdk', label: 'Data change event', dashed: true },
+            { from: 'sdk', to: 'ui', label: 'Binding 同步新 snapshot', dashed: true },
+            { from: 'ui', to: 'human', label: '局部界面已更新', dashed: true },
+          ],
+        },
+
+        s1: {
+          label: '场景 1',
+          title: '场景 1 · Agent 通过 timeline.inspect 读取领域视图',
+          desc: '这里只完整画一次所有 Tool 调用共有的前置流程：解析 Instance、检查 Active、tools.list、校验输入，再调用 Package 提供的领域查询。',
+          copy: 'timeline.inspect 返回轨道、clip、播放区间等领域化视图，而不是转发完整原始 Data。INSTANCE_STOPPED、INSTANCE_ARCHIVED、TOOL_NOT_FOUND、INPUT_INVALID 与 Handler 失败都在 Daemon 返回；后续 Tool 场景默认已有同样检查。',
+          messages: [
+            { from: 'agent', to: 'cli', label: 'instance get + tools.list', sub: '{instanceId}' },
+            { from: 'cli', to: 'daemon', label: '解析 Instance + 检查 Active' },
+            { from: 'daemon', to: 'pkg', label: '读取当前 Binding 的 Tool Registry' },
+            { from: 'pkg', to: 'daemon', label: '返回 Tool Registry', dashed: true },
+            {
+              from: 'daemon',
+              to: 'cli',
+              label: '返回 schema 或 typed error',
+              dashed: true,
+              sub: 'Stopped · Archived · Not Found',
+            },
+            { from: 'cli', to: 'agent', label: '转发 Tool Contract', dashed: true },
+            {
+              from: 'agent',
+              to: 'cli',
+              label: 'tool.call timeline.inspect',
+              sub: '{instanceId, input}',
+            },
+            { from: 'cli', to: 'daemon', label: '转发并校验输入' },
+            { from: 'daemon', to: 'ui', label: '路由 Runtime Tool Handler' },
+            { from: 'ui', to: 'sdk', label: 'data.read()', sub: '不传 instanceId' },
+            { from: 'sdk', to: 'daemon', label: '读取当前 Instance' },
+            { from: 'daemon', to: 'data', label: '读取权威 Data' },
+            { from: 'data', to: 'daemon', label: '返回 snapshot + revision', dashed: true },
+            { from: 'daemon', to: 'sdk', label: '返回 snapshot', dashed: true },
+            { from: 'sdk', to: 'ui', label: '生成 timeline view', dashed: true },
+            { from: 'ui', to: 'daemon', label: '返回 Tool output', dashed: true },
+            { from: 'daemon', to: 'cli', label: '{callId, revision, output}', dashed: true },
+            { from: 'cli', to: 'agent', label: '转发领域视图', dashed: true },
+          ],
+        },
+
+        s2: {
+          label: '场景 2',
+          title: '场景 2 · Agent 通过 Data API 读取原始 Data',
+          desc: 'Package 没有满足需求的读取 Tool 时，Agent 经 OA Interface 读取原始 Data；Daemon 直接访问权威 Data，不经过 Artifact Runtime。',
+          copy: '这是 Tool 能力不足时的 fallback，而不是默认入口。Agent 显式传 instanceId；返回 snapshot 与 observed revision，便于后续 mutation 做冲突检查。',
+          messages: [
+            { from: 'agent', to: 'cli', label: 'data.get', sub: '{instanceId, path}' },
+            { from: 'cli', to: 'daemon', label: '转发读取请求' },
+            { from: 'daemon', to: 'data', label: '读取 Instance Data' },
+            { from: 'data', to: 'daemon', label: 'snapshot + revision', dashed: true },
+            { from: 'daemon', to: 'cli', label: '返回 Data receipt', dashed: true },
+            { from: 'cli', to: 'agent', label: '转发原始 Data', dashed: true },
+          ],
+        },
+
+        s2w: {
+          label: '场景 2B',
+          title: '场景 2B · Agent 通过 Data API 修改原始 Data',
+          desc: '只有 Tool Registry 明确没有合适能力时，Agent 才直接改 Data。Daemon 校验 Contract、baseRevision 与幂等键，再写 Git revision。',
+          copy: '外部 Agent 显式传 instanceId、baseRevision 与 idempotencyKey。冲突返回 REVISION_CONFLICT，禁止静默覆盖；相同幂等键的重试返回原 receipt。成功后 SDK Binding 让已打开的 Artifact UI 收敛，Agent 再读回验证。',
+          messages: [
+            {
+              from: 'agent',
+              to: 'cli',
+              label: 'data.write',
+              sub: '{instanceId, baseRevision, idempotencyKey}',
+            },
+            { from: 'cli', to: 'daemon', label: '转发 mutation' },
+            { from: 'daemon', to: 'data', label: 'Contract + revision 校验', sub: '冲突则不写入' },
+            {
+              from: 'daemon',
+              to: 'data',
+              label: '幂等提交 + Git commit',
+              sub: '成功产生 revision',
+            },
+            { from: 'daemon', to: 'cli', label: '返回 mutation receipt', dashed: true },
+            { from: 'cli', to: 'agent', label: '{callId, revision, status}', dashed: true },
+            { from: 'daemon', to: 'sdk', label: 'Data change event', dashed: true },
+            { from: 'sdk', to: 'ui', label: 'Binding 同步 snapshot', dashed: true },
+            { from: 'agent', to: 'cli', label: 'data.get', sub: '回读验证' },
+            { from: 'cli', to: 'daemon', label: '读取新 revision' },
+            { from: 'daemon', to: 'data', label: '读取权威 Data' },
+            { from: 'daemon', to: 'cli', label: '返回 snapshot', dashed: true },
+            { from: 'cli', to: 'agent', label: '验证修改结果', dashed: true },
+            { from: 'ui', to: 'human', label: '同一 UI 可见变化', dashed: true },
+          ],
+        },
+
+        s3: {
+          label: '场景 3',
+          title: '场景 3 · Agent 调语义 Tool 改 Data',
+          desc: 'Agent 调用 timeline.trim；Daemon 路由到当前 Runtime Handler，Handler 用自动绑定的 SDK 写 Data，并在提交后返回领域结果。',
+          copy: 'Tool 调用携带 instanceId、baseRevision 与 idempotencyKey；Package Handler 的 SDK 调用不带 instanceId。Daemon 先提交 Git revision，再校验并返回 Tool output；UI 与 Agent 都基于同一个 revision 验证结果。',
+          messages: [
+            {
+              from: 'agent',
+              to: 'cli',
+              label: 'tool.call timeline.trim',
+              sub: '{instanceId, baseRevision, idempotencyKey}',
+            },
+            { from: 'cli', to: 'daemon', label: '转发 Tool call' },
+            { from: 'daemon', to: 'ui', label: '路由 Runtime Tool Handler' },
+            {
+              from: 'ui',
+              to: 'sdk',
+              label: 'binding.update(change)',
+              sub: 'SDK 自动附加 baseRevision',
+            },
+            { from: 'sdk', to: 'daemon', label: '提交 mutation' },
+            { from: 'daemon', to: 'data', label: '幂等提交 + Git commit' },
+            { from: 'daemon', to: 'sdk', label: '返回 committed revision', dashed: true },
+            { from: 'sdk', to: 'ui', label: 'Handler 生成 Tool output', dashed: true },
+            { from: 'ui', to: 'daemon', label: '返回 Tool output', dashed: true },
+            { from: 'daemon', to: 'cli', label: '{callId, revision, output}', dashed: true },
+            { from: 'cli', to: 'agent', label: '转发 Tool result', dashed: true },
+            { from: 'daemon', to: 'sdk', label: 'Data change event', dashed: true },
+            { from: 'sdk', to: 'ui', label: 'Binding 同步新 timeline', dashed: true },
+            { from: 'agent', to: 'cli', label: 'timeline.inspect', sub: '回读验证' },
+            { from: 'cli', to: 'agent', label: '验证新 revision', dashed: true },
+            { from: 'ui', to: 'human', label: '同一 UI 可见变化', dashed: true },
+          ],
+        },
+
+        s4: {
+          label: '场景 4',
+          title: '场景 4 · Package 自定义 Selection → Agent 执行 → Human 验收',
+          desc: '人在 ChatCut 时间线上选择片段；Package 生成精确 Target。Agent 执行前重新定位，Tool 成功先 applied，Human 验收后才 resolved。',
+          copy: 'Target Snapshot 只证明创建时上下文。Agent 必须对当前 Data 做 resolveTarget；只有唯一 resolved 才能 trim，ambiguous / orphaned 时回复并保持 open。每次 Annotation 变更都返回 receipt 并产生 change event。',
+          messages: [
+            { from: 'human', to: 'ui', label: '选中 12.3–18.7s', sub: '“删掉这里的停顿”' },
+            {
+              from: 'ui',
+              to: 'sdk',
+              label: 'annotation.create',
+              sub: 'Package Target + Snapshot · SDK idem',
+            },
+            { from: 'sdk', to: 'daemon', label: '提交到当前 Instance' },
+            { from: 'daemon', to: 'annotation', label: '保存 status: open' },
+            {
+              from: 'daemon',
+              to: 'sdk',
+              label: '{annotationId, revision, open}',
+              dashed: true,
+            },
+            { from: 'daemon', to: 'workbench', label: 'annotation change event', dashed: true },
+            {
+              from: 'agent',
+              to: 'cli',
+              label: 'annotation.get',
+              sub: '{instanceId, annotationId}',
+            },
+            { from: 'cli', to: 'daemon', label: '读取 Annotation + Snapshot' },
+            { from: 'daemon', to: 'annotation', label: '读取当前线程' },
+            { from: 'annotation', to: 'daemon', label: '返回上下文', dashed: true },
+            { from: 'daemon', to: 'cli', label: '返回 Annotation', dashed: true },
+            { from: 'cli', to: 'agent', label: '转发上下文', dashed: true },
+            { from: 'agent', to: 'cli', label: 'target.resolve', sub: '基于当前 Data' },
+            { from: 'cli', to: 'daemon', label: '请求重新定位' },
+            { from: 'daemon', to: 'ui', label: 'Package resolveTarget' },
+            { from: 'ui', to: 'daemon', label: '返回 resolution status', dashed: true },
+            {
+              from: 'daemon',
+              to: 'cli',
+              label: '唯一 resolved target',
+              dashed: true,
+              sub: '否则要求 Human 重选',
+            },
+            { from: 'cli', to: 'agent', label: '转发当前 Target', dashed: true },
+            {
+              from: 'agent',
+              to: 'cli',
+              label: 'tool.call timeline.trim',
+              sub: 'annotationId + baseRevision + idempotencyKey',
+            },
+            { from: 'cli', to: 'daemon', label: '路由 Tool call' },
+            { from: 'daemon', to: 'ui', label: '调用 Runtime Handler' },
+            {
+              from: 'ui',
+              to: 'sdk',
+              label: 'binding.update(change)',
+              sub: 'SDK 自动附加 baseRevision',
+            },
+            { from: 'sdk', to: 'daemon', label: '提交 mutation' },
+            { from: 'daemon', to: 'data', label: 'Git commit Data' },
+            { from: 'ui', to: 'daemon', label: '返回 Tool output', dashed: true },
+            { from: 'daemon', to: 'annotation', label: '写入证据 · status: applied' },
+            { from: 'daemon', to: 'workbench', label: 'applied change event', dashed: true },
+            { from: 'workbench', to: 'human', label: '展示结果证据', dashed: true },
+            { from: 'human', to: 'workbench', label: '验收修改' },
+            {
+              from: 'workbench',
+              to: 'daemon',
+              label: 'annotation.resolve',
+              sub: '最新 revision · Workbench idem',
+            },
+            { from: 'daemon', to: 'annotation', label: 'status: resolved' },
+            {
+              from: 'daemon',
+              to: 'workbench',
+              label: '{annotationId, revision, resolved}',
+              dashed: true,
+            },
+            { from: 'daemon', to: 'sdk', label: 'Data change event', dashed: true },
+            { from: 'sdk', to: 'ui', label: 'Binding 同步 timeline', dashed: true },
+          ],
+        },
+
+        s5: {
+          label: '场景 5',
+          title: '场景 5 · Workbench Inspector 标注 → Agent 验证后解决',
+          desc: 'Package 没有自定义 Selection 时，DOM Inspector 生成兜底 Target。Agent 仍必须在当前 Data 上重新定位，不能直接拿历史 DOM Snapshot 执行。',
+          copy: 'resolved 才继续；ambiguous、orphaned 或 unsupported 都不写 Data，并要求 Human 重新选择。Tool 成功先 applied，Agent 回读验证后才能以最新 Annotation revision 标为 resolved。',
+          messages: [
+            { from: 'human', to: 'workbench', label: '选中一段文字', sub: 'DOM Inspector' },
+            {
+              from: 'workbench',
+              to: 'daemon',
+              label: 'annotation.create',
+              sub: 'DOM Target + Snapshot · Workbench idem',
+            },
+            { from: 'daemon', to: 'annotation', label: '保存 status: open' },
+            {
+              from: 'daemon',
+              to: 'workbench',
+              label: '{annotationId, revision, open}',
+              dashed: true,
+            },
+            { from: 'daemon', to: 'workbench', label: 'annotation change event', dashed: true },
+            { from: 'agent', to: 'cli', label: 'annotation.get' },
+            { from: 'cli', to: 'daemon', label: '读取 Annotation' },
+            { from: 'daemon', to: 'annotation', label: '读取 Target + Snapshot' },
+            { from: 'annotation', to: 'daemon', label: '返回历史证据', dashed: true },
+            { from: 'daemon', to: 'cli', label: '返回 Annotation', dashed: true },
+            { from: 'cli', to: 'agent', label: '转发历史证据', dashed: true },
+            { from: 'agent', to: 'cli', label: 'target.resolve', sub: '当前 Data' },
+            { from: 'cli', to: 'daemon', label: '请求重新定位' },
+            { from: 'daemon', to: 'ui', label: '解析当前文本 Target' },
+            { from: 'ui', to: 'daemon', label: '返回 resolution status', dashed: true },
+            {
+              from: 'daemon',
+              to: 'cli',
+              label: 'resolution status',
+              dashed: true,
+              sub: '只有 resolved 继续',
+            },
+            { from: 'cli', to: 'agent', label: '转发当前 Target', dashed: true },
+            {
+              from: 'agent',
+              to: 'cli',
+              label: 'tool.call format',
+              sub: 'resolved target + idempotencyKey',
+            },
+            { from: 'cli', to: 'daemon', label: '路由 Tool call' },
+            { from: 'daemon', to: 'ui', label: '调用 Runtime Handler' },
+            {
+              from: 'ui',
+              to: 'sdk',
+              label: 'binding.update(change)',
+              sub: 'SDK 自动附加 baseRevision',
+            },
+            { from: 'sdk', to: 'daemon', label: '提交 mutation' },
+            { from: 'daemon', to: 'data', label: 'Git commit Data' },
+            { from: 'ui', to: 'daemon', label: '返回 Tool output', dashed: true },
+            { from: 'daemon', to: 'annotation', label: '证据 + status: applied' },
+            { from: 'agent', to: 'cli', label: 'data.get / inspect', sub: '回读验证' },
+            { from: 'cli', to: 'agent', label: '验证 applied revision', dashed: true },
+            {
+              from: 'agent',
+              to: 'cli',
+              label: 'annotation.resolve',
+              sub: '最新 Annotation revision + idempotencyKey',
+            },
+            { from: 'cli', to: 'daemon', label: '转发 resolve' },
+            { from: 'daemon', to: 'annotation', label: 'status: resolved' },
+            {
+              from: 'daemon',
+              to: 'cli',
+              label: '{annotationId, revision, resolved}',
+              dashed: true,
+            },
+            { from: 'daemon', to: 'workbench', label: 'annotation change event', dashed: true },
+          ],
+        },
+
+        s6a: {
+          label: '场景 6A',
+          title: '场景 6A · Human approved：执行 Agent 提案',
+          desc: 'Agent review 后用 Annotation 提交方案；Human 明确 approved，Agent 读取最新回复并执行，验证通过后解决线程。',
+          copy: 'approved 是三种 Human Decision 中唯一允许写 Data 的状态。执行仍需 resolveTarget 与 baseRevision；Tool 成功先 applied，Agent 回读验证后才 resolved。',
+          messages: [
+            { from: 'agent', to: 'cli', label: 'timeline.inspect', sub: 'review 当前状态' },
+            { from: 'cli', to: 'agent', label: '返回领域上下文 + revision', dashed: true },
+            {
+              from: 'agent',
+              to: 'cli',
+              label: 'annotation.create',
+              sub: 'Proposal + Target + evidence + idempotencyKey',
+            },
+            { from: 'cli', to: 'daemon', label: '提交 Proposal' },
+            { from: 'daemon', to: 'annotation', label: '保存 status: open' },
+            {
+              from: 'daemon',
+              to: 'cli',
+              label: '{annotationId, revision, open}',
+              dashed: true,
+            },
+            { from: 'cli', to: 'agent', label: '转发 create receipt', dashed: true },
+            { from: 'daemon', to: 'workbench', label: 'annotation change event', dashed: true },
+            { from: 'workbench', to: 'human', label: '展示待确认方案', dashed: true },
+            { from: 'human', to: 'workbench', label: 'decision: approved' },
+            { from: 'workbench', to: 'daemon', label: 'annotation.reply', sub: 'Workbench idem' },
+            { from: 'daemon', to: 'annotation', label: '保存 approved + revision' },
+            { from: 'daemon', to: 'cli', label: 'reply receipt + event', dashed: true },
+            { from: 'cli', to: 'agent', label: '转发 approved', dashed: true },
+            { from: 'agent', to: 'cli', label: 'annotation.get latest' },
+            { from: 'cli', to: 'agent', label: 'approved + latest revision', dashed: true },
+            {
+              from: 'agent',
+              to: 'cli',
+              label: 'target.resolve → tool.call',
+              sub: 'apply proposal + idempotencyKey',
+            },
+            { from: 'cli', to: 'daemon', label: '路由已批准 Tool call' },
+            { from: 'daemon', to: 'ui', label: '调用 Runtime Handler' },
+            {
+              from: 'ui',
+              to: 'sdk',
+              label: 'binding.update(change)',
+              sub: 'SDK 自动附加 baseRevision',
+            },
+            { from: 'sdk', to: 'daemon', label: '提交 mutation' },
+            { from: 'daemon', to: 'data', label: 'Git commit Data' },
+            { from: 'daemon', to: 'annotation', label: '证据 + status: applied' },
+            { from: 'daemon', to: 'cli', label: 'Tool receipt + applied event', dashed: true },
+            { from: 'cli', to: 'agent', label: '转发 applied 结果', dashed: true },
+            { from: 'agent', to: 'cli', label: 'timeline.inspect', sub: '验证结果' },
+            { from: 'cli', to: 'agent', label: '验证通过', dashed: true },
+            {
+              from: 'agent',
+              to: 'cli',
+              label: 'annotation.resolve',
+              sub: '最新 Annotation revision + idempotencyKey',
+            },
+            { from: 'cli', to: 'daemon', label: '转发 resolve' },
+            { from: 'daemon', to: 'annotation', label: 'status: resolved' },
+            { from: 'daemon', to: 'workbench', label: 'resolved receipt + event', dashed: true },
+          ],
+        },
+
+        s6b: {
+          label: '场景 6B',
+          title: '场景 6B · Human rejected：关闭提案，不执行',
+          desc: 'Agent 提交 Proposal；Human 明确 rejected。Daemon 保存最终状态并发出事件，Agent 不调用 Tool，Data revision 不变。',
+          copy: 'rejected 不是 Tool 失败，而是 Human 对提案的最终决定。它关闭本次 Proposal，留下决定证据；不会发生 Data mutation，也不会进入 applied。',
+          messages: [
+            { from: 'agent', to: 'cli', label: 'timeline.inspect', sub: 'review 当前状态' },
+            { from: 'cli', to: 'agent', label: '返回领域上下文 + revision', dashed: true },
+            {
+              from: 'agent',
+              to: 'cli',
+              label: 'annotation.create',
+              sub: 'Proposal + evidence + idempotencyKey',
+            },
+            { from: 'cli', to: 'daemon', label: '提交 Proposal' },
+            { from: 'daemon', to: 'annotation', label: '保存 status: open' },
+            {
+              from: 'daemon',
+              to: 'cli',
+              label: '{annotationId, revision, open}',
+              dashed: true,
+            },
+            { from: 'cli', to: 'agent', label: '转发 create receipt', dashed: true },
+            { from: 'daemon', to: 'workbench', label: 'annotation change event', dashed: true },
+            { from: 'workbench', to: 'human', label: '展示待确认方案', dashed: true },
+            { from: 'human', to: 'workbench', label: 'decision: rejected' },
+            { from: 'workbench', to: 'daemon', label: 'annotation.reply', sub: 'Workbench idem' },
+            { from: 'daemon', to: 'annotation', label: 'status: rejected', sub: 'Data 不变' },
+            {
+              from: 'daemon',
+              to: 'workbench',
+              label: '{annotationId, revision, rejected}',
+              dashed: true,
+            },
+            { from: 'daemon', to: 'cli', label: 'rejected change event', dashed: true },
+            { from: 'cli', to: 'agent', label: '转发 rejected', dashed: true },
+            { from: 'agent', to: 'cli', label: '确认最终状态', sub: '不调用 Tool' },
+            { from: 'cli', to: 'agent', label: 'Data revision unchanged', dashed: true },
+          ],
+        },
+
+        s6c: {
+          label: '场景 6C',
+          title: '场景 6C · Human needs-revision：Agent 修改后再次确认',
+          desc: 'Human 要求修改方案；Annotation 保持 open。Agent 读取反馈、提交新版 Proposal，再回到等待确认，不修改 Data。',
+          copy: 'needs-revision 不等于 approved，也不触发 Tool。新版 Proposal 以最新 Annotation revision 回复到同一线程；每次 reply 都返回 receipt 并产生 change event。',
+          messages: [
+            { from: 'agent', to: 'cli', label: 'timeline.inspect', sub: 'review 当前状态' },
+            { from: 'cli', to: 'agent', label: '返回领域上下文 + revision', dashed: true },
+            {
+              from: 'agent',
+              to: 'cli',
+              label: 'annotation.create',
+              sub: 'Proposal v1 + idempotencyKey',
+            },
+            { from: 'cli', to: 'daemon', label: '提交 Proposal' },
+            { from: 'daemon', to: 'annotation', label: '保存 status: open' },
+            {
+              from: 'daemon',
+              to: 'cli',
+              label: '{annotationId, revision, open}',
+              dashed: true,
+            },
+            { from: 'cli', to: 'agent', label: '转发 create receipt', dashed: true },
+            { from: 'daemon', to: 'workbench', label: 'annotation change event', dashed: true },
+            { from: 'workbench', to: 'human', label: '展示 Proposal v1', dashed: true },
+            {
+              from: 'human',
+              to: 'workbench',
+              label: 'decision: needs-revision',
+              sub: '附修改意见',
+            },
+            { from: 'workbench', to: 'daemon', label: 'annotation.reply', sub: 'Workbench idem' },
+            { from: 'daemon', to: 'annotation', label: '保存反馈 · status: open' },
+            { from: 'daemon', to: 'cli', label: 'reply receipt + event', dashed: true },
+            { from: 'cli', to: 'agent', label: '转发 needs-revision', dashed: true },
+            { from: 'agent', to: 'cli', label: 'annotation.get latest' },
+            { from: 'cli', to: 'agent', label: '返回反馈 + revision', dashed: true },
+            {
+              from: 'agent',
+              to: 'cli',
+              label: 'annotation.reply',
+              sub: 'Proposal v2 + idempotencyKey',
+            },
+            { from: 'cli', to: 'daemon', label: '提交修订方案' },
+            { from: 'daemon', to: 'annotation', label: '保存 Proposal v2 · open' },
+            {
+              from: 'daemon',
+              to: 'cli',
+              label: '{annotationId, revision, open}',
+              dashed: true,
+            },
+            { from: 'cli', to: 'agent', label: '转发 Proposal v2 receipt', dashed: true },
+            { from: 'daemon', to: 'workbench', label: '新 Proposal change event', dashed: true },
+            { from: 'workbench', to: 'human', label: '再次请求确认', dashed: true },
+          ],
+        },
+
+        s7: {
+          label: '场景 7',
+          title: '场景 7 · 同一 Instance 切换到新的 Package',
+          desc: '本地 Agent 准备并修改新的 Package，然后显式替换原 Instance 的 Package Binding。Instance ID、Data 与 Annotations 都不变。',
+          copy: '这不是新建或 fork Instance。Daemon 校验新 Package 后停止旧 Runtime、替换 Binding、用新 Package 启动同一个 Instance，并重新注入 SDK Binding。云端 Agent 暂时不能直接访问本地 Package 源码，直到 OA 拥有统一文件系统抽象。',
+          messages: [
+            {
+              from: 'agent',
+              to: 'pkg',
+              label: '准备新的 Package 源码',
+              sub: '仅本地 Source authority',
+            },
+            { from: 'agent', to: 'pkg', label: '用文件工具修改源码', sub: '不经 OA Data API' },
+            {
+              from: 'agent',
+              to: 'cli',
+              label: 'instance.replace-package',
+              sub: '{instanceId, packageRef, idempotencyKey}',
+            },
+            { from: 'cli', to: 'daemon', label: '转发 Package replacement' },
+            { from: 'daemon', to: 'pkg', label: '校验 Source / Contract' },
+            { from: 'daemon', to: 'data', label: '检查现有 Data compatibility' },
+            { from: 'daemon', to: 'ui', label: 'stop 旧 Runtime', dashed: true },
+            { from: 'daemon', to: 'pkg', label: '固定新的 Package Binding' },
+            { from: 'pkg', to: 'daemon', label: '返回可启动 Package', dashed: true },
+            { from: 'daemon', to: 'ui', label: 'start 同一 Instance', sub: '加载新 Package' },
+            { from: 'daemon', to: 'sdk', label: '注入当前 Instance Context', dashed: true },
+            { from: 'sdk', to: 'ui', label: 'Binding 读取现有 Data', dashed: true },
+            { from: 'ui', to: 'human', label: '新 Artifact UI 可见', dashed: true },
+            { from: 'daemon', to: 'cli', label: '返回 replacement receipt', dashed: true },
+            {
+              from: 'cli',
+              to: 'agent',
+              label: '{instanceId, packageRevision, status}',
+              dashed: true,
+            },
+          ],
+        },
+      };
+
+      const SVGNS = 'http://www.w3.org/2000/svg';
+      const MARGIN_X = 64;
+      const PITCH = 120;
+      const HEAD_TOP = 16;
+      const HEAD_H = 48;
+      const LIFELINE_TOP = 72;
+      const ROW_START = 108;
+      const ROW_H = 40;
+
+      const laneX = (key) => MARGIN_X + laneIndex[key] * PITCH;
+
+      function el(name, attrs, text) {
+        const node = document.createElementNS(SVGNS, name);
+        for (const [k, v] of Object.entries(attrs || {})) node.setAttribute(k, v);
+        if (text != null) node.textContent = text;
+        return node;
+      }
+
+      function renderLaneTips(activeKey) {
+        const tips = document.querySelector('#lane-tips');
+        tips.textContent = '';
+        for (const lane of lanes) {
+          const tip = document.createElement('article');
+          tip.className = 'lane-tip';
+          tip.style.setProperty('--tip-color', lane.color);
+          tip.dataset.key = lane.key;
+          tip.dataset.active = String(lane.key === activeKey);
+          const strong = document.createElement('strong');
+          strong.textContent = lane.label;
+          const span = document.createElement('span');
+          span.textContent = lane.tip;
+          tip.appendChild(strong);
+          tip.appendChild(span);
+          tip.addEventListener('mouseenter', () => renderLaneTips(lane.key));
+          tip.addEventListener('mouseleave', () => renderLaneTips());
+          tips.appendChild(tip);
+        }
+      }
+
+      function renderScenario(id) {
+        const scenario = scenarios[id] || scenarios.s0;
+        const svg = document.querySelector('#sequence-svg');
+        svg.textContent = '';
+
+        const width = MARGIN_X * 2 + PITCH * (lanes.length - 1);
+        const height = ROW_START + scenario.messages.length * ROW_H + 24;
+        svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+        svg.setAttribute('aria-label', scenario.title + ' 泳道时序图');
+
+        const defs = el('defs');
+        const marker = el('marker', {
+          id: 'seq-arrow',
+          viewBox: '0 0 10 10',
+          refX: '9',
+          refY: '5',
+          markerWidth: '7',
+          markerHeight: '7',
+          orient: 'auto-start-reverse',
+        });
+        marker.appendChild(el('path', { d: 'M 0 0 L 10 5 L 0 10 z', fill: '#17231f' }));
+        defs.appendChild(marker);
+        svg.appendChild(defs);
+
+        for (const lane of lanes) {
+          const cx = laneX(lane.key);
+          const group = el('g', { class: 'lane-header', 'data-lane': lane.key });
+          group.appendChild(el('title', {}, `${lane.label}：${lane.tip}`));
+          group.appendChild(
+            el('rect', {
+              x: cx - 58,
+              y: HEAD_TOP,
+              width: 116,
+              height: HEAD_H,
+              rx: 10,
+              fill: lane.color,
+              'fill-opacity': '0.12',
+            }),
+          );
+          group.appendChild(
+            el(
+              'text',
+              {
+                class: 'lane-label',
+                x: cx,
+                y: HEAD_TOP + 20,
+                'text-anchor': 'middle',
+                fill: lane.color,
+              },
+              lane.label,
+            ),
+          );
+          group.appendChild(
+            el(
+              'text',
+              { class: 'lane-sub', x: cx, y: HEAD_TOP + 36, 'text-anchor': 'middle' },
+              lane.sub,
+            ),
+          );
+          group.addEventListener('mouseenter', () => renderLaneTips(lane.key));
+          group.addEventListener('mouseleave', () => renderLaneTips());
+          svg.appendChild(group);
+          svg.appendChild(
+            el('line', {
+              x1: cx,
+              y1: LIFELINE_TOP,
+              x2: cx,
+              y2: height - 14,
+              stroke: '#c7d2ca',
+              'stroke-dasharray': '4 5',
+            }),
+          );
+        }
+
+        scenario.messages.forEach((msg, i) => {
+          const y = ROW_START + i * ROW_H;
+          const x1 = laneX(msg.from);
+          const x2 = laneX(msg.to);
+          const mid = (x1 + x2) / 2;
+          const lineAttrs = {
+            x1,
+            y1: y,
+            x2,
+            y2: y,
+            stroke: '#17231f',
+            'marker-end': 'url(#seq-arrow)',
+          };
+          if (msg.dashed) lineAttrs['stroke-dasharray'] = '3 3';
+          svg.appendChild(el('line', lineAttrs));
+          svg.appendChild(
+            el(
+              'text',
+              { class: 'msg-label', x: mid, y: y - 7, 'text-anchor': 'middle' },
+              `${i + 1}. ${msg.label}`,
+            ),
+          );
+          if (msg.sub) {
+            svg.appendChild(
+              el('text', { class: 'msg-sub', x: mid, y: y + 12, 'text-anchor': 'middle' }, msg.sub),
+            );
+          }
+        });
+
+        document.querySelector('#seq-title').textContent = scenario.title;
+        document.querySelector('#seq-desc').textContent = scenario.desc;
+        document.querySelector('#scenario-label').textContent =
+          scenario.label || id.toUpperCase().replace('S', '场景 ');
+        document.querySelector('#scenario-copy').textContent = scenario.copy;
+        renderLaneTips();
+      }
+
+      const buttons = [...document.querySelectorAll('[data-scenario]')];
+
+      function showScenario(id) {
+        for (const button of buttons) {
+          const active = button.dataset.scenario === id;
+          button.setAttribute('aria-pressed', String(active));
+          button.setAttribute('aria-selected', String(active));
+        }
+        renderScenario(id);
+      }
+
+      for (const button of buttons) {
+        button.addEventListener('click', () => showScenario(button.dataset.scenario || 's0'));
+      }
+
+      showScenario('s0');
+    </script>
+  </body>
+</html>

@@ -1,0 +1,83 @@
+:root {
+  color-scheme: light;
+
+  /* Foundation */
+  --oa-graphite: #111a2b;
+  --oa-graphite-soft: #26334a;
+  --oa-fog: #edf2f7;
+  --oa-fog-deep: #dfe6ee;
+  --oa-porcelain: #fbfcfe;
+  --oa-white: #ffffff;
+  --oa-signal: #2567e8;
+  --oa-signal-soft: #e7f0ff;
+  --oa-context: #d98913;
+  --oa-context-soft: #fff2d7;
+  --oa-data: #07886f;
+  --oa-data-soft: #e5f6f1;
+  --oa-package: #7057d9;
+  --oa-package-soft: #efebff;
+  --oa-danger: #a84f62;
+  --oa-danger-soft: #f9e9ee;
+
+  /* Semantic color */
+  --oa-text: var(--oa-graphite);
+  --oa-text-muted: #5f6d83;
+  --oa-text-faint: #8b96a8;
+  --oa-background: var(--oa-fog);
+  --oa-surface: var(--oa-white);
+  --oa-surface-soft: var(--oa-porcelain);
+  --oa-border: #d0d9e5;
+  --oa-border-strong: #aab8cb;
+  --oa-focus: var(--oa-signal);
+  --oa-selection: var(--oa-context);
+  --oa-success: var(--oa-data);
+
+  /* Typography */
+  --oa-font-display:
+    'Avenir Next', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --oa-font-body:
+    Inter, 'SF Pro Text', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+    'Microsoft YaHei', sans-serif;
+  --oa-font-mono: 'SFMono-Regular', 'Roboto Mono', Menlo, Monaco, Consolas, monospace;
+  --oa-text-0: 0.6875rem;
+  --oa-text-1: 0.75rem;
+  --oa-text-2: 0.875rem;
+  --oa-text-3: 1rem;
+  --oa-text-4: 1.25rem;
+  --oa-text-5: clamp(1.5rem, 1.2rem + 1vw, 2.25rem);
+  --oa-line-tight: 1.08;
+  --oa-line-body: 1.58;
+  --oa-tracking-tight: -0.035em;
+  --oa-tracking-label: 0.09em;
+
+  /* Spacing */
+  --oa-space-1: 0.25rem;
+  --oa-space-2: 0.5rem;
+  --oa-space-3: 0.75rem;
+  --oa-space-4: 1rem;
+  --oa-space-5: 1.25rem;
+  --oa-space-6: 1.5rem;
+  --oa-space-7: 2rem;
+  --oa-space-8: 3rem;
+
+  /* Shape and depth */
+  --oa-radius-1: 0.5rem;
+  --oa-radius-2: 0.75rem;
+  --oa-radius-3: 1rem;
+  --oa-radius-4: 1.5rem;
+  --oa-shadow-float: 0 1rem 3rem rgb(17 26 43 / 14%);
+  --oa-shadow-menu: 0 0.75rem 2rem rgb(17 26 43 / 16%);
+
+  /* Layout */
+  --oa-command-height: 4rem;
+  --oa-status-height: 2rem;
+  --oa-instance-width: 15.5rem;
+  --oa-context-width: 22.5rem;
+  --oa-touch-target: 2.75rem;
+
+  /* Motion */
+  --oa-duration-fast: 160ms;
+  --oa-duration-medium: 240ms;
+  --oa-duration-trace: 320ms;
+  --oa-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+}

@@ -7,6 +7,7 @@ const artifactPackage: ResolvedArtifactPackage = {
   exampleInput: { source: 'example' },
   identity: {
     entryPath: '/artifact/src/index.tsx',
+    format: 'react-render/v0',
     name: '@open-artifacts/input-fixture',
     root: '/artifact',
     version: '0.0.0',

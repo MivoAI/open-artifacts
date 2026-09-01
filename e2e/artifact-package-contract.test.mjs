@@ -8,14 +8,22 @@ const packagesRoot = resolve('packages');
 const expectedPackages = [
   {
     directory: 'artifact-decision-board',
+    format: 'react-render/v0',
     name: '@open-artifacts/decision-board',
   },
   {
     directory: 'artifact-evidence-trace',
+    format: 'react-render/v0',
     name: '@open-artifacts/evidence-trace',
   },
   {
+    directory: 'artifact-markdown-editor',
+    format: 'react-runtime/v1',
+    name: '@open-artifacts/markdown-editor',
+  },
+  {
     directory: 'artifact-video-editor',
+    format: 'react-runtime/v1',
     name: '@open-artifacts/video-editor',
   },
 ];
@@ -47,9 +55,12 @@ test('the repository ships the canonical forkable Artifact Packages', async () =
   for (const directory of packageDirectories) {
     const packageRoot = resolve(packagesRoot, directory.name);
     const manifest = await readJson(resolve(packageRoot, 'package.json'));
+    const expectedPackage = expectedPackages.find(
+      (candidate) => candidate.directory === directory.name,
+    );
 
     assert.equal(manifest.name, `@open-artifacts/${directory.name.slice('artifact-'.length)}`);
-    assert.equal(manifest.openArtifacts?.format, 'react-render/v0');
+    assert.equal(manifest.openArtifacts?.format, expectedPackage?.format);
     assert.equal(manifest.exports?.['.'], './src/index.tsx');
     assert.equal(manifest.exports?.['./schema'], './input.schema.json');
     assert.equal(manifest.exports?.['./example'], './example.json');
@@ -60,6 +71,11 @@ test('the repository ships the canonical forkable Artifact Packages', async () =
     assert.ok(manifest.files?.includes('tsconfig.json'));
     assert.ok(manifest.peerDependencies?.react);
     assert.equal(manifest.dependencies?.react, undefined);
+    if (manifest.openArtifacts.format === 'react-runtime/v1') {
+      assert.equal(manifest.exports?.['./activate'], './src/activate.ts');
+      assert.ok(manifest.peerDependencies?.['@open-artifacts/sdk']);
+      await access(resolveInside(packageRoot, manifest.exports['./activate']));
+    }
 
     const sourceEntry = resolveInside(packageRoot, manifest.exports['.']);
     const schemaEntry = resolveInside(packageRoot, manifest.exports['./schema']);
@@ -103,7 +119,10 @@ test('the packed Video Editor contains the complete forkable source package', ()
       'example.json',
       'input.schema.json',
       'package.json',
+      'src/activate.test.ts',
+      'src/activate.ts',
       'src/index.tsx',
+      'src/model.test.ts',
       'src/model.ts',
       'src/styles.css',
       'tsconfig.json',

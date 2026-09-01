@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -41,6 +41,8 @@ test('the built oa executable exposes the approved first command surface', () =>
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /Usage: oa/);
   assert.match(result.stdout, /run \[options\] <artifact>/);
+  assert.match(result.stdout, /tool/);
+  assert.match(result.stdout, /annotation/);
   assert.doesNotMatch(result.stdout, /^\s+help\b/m);
   assert.equal(runHelp.status, 0, runHelp.stderr);
   assert.match(runHelp.stdout, /--json/);
@@ -134,8 +136,29 @@ test('oa run starts local Artifact Packages from relative and absolute reference
     results.push(session);
 
     assert.equal(session.artifact.name, reference.name);
+    assert.match(session.instanceId, /^[0-9a-f-]{36}$/);
+    assert.match(session.bundlePath, /\.openartifact$/);
     assert.match(session.sessionId, /^[0-9a-f-]{36}$/);
     assert.match(session.url, /^http:\/\/127\.0\.0\.1:\d+\/$/);
+
+    const instanceManifest = JSON.parse(
+      await readFile(join(session.bundlePath, 'instance.json'), 'utf8'),
+    );
+    assert.deepEqual(
+      {
+        instanceId: instanceManifest.instanceId,
+        state: instanceManifest.state,
+      },
+      {
+        instanceId: session.instanceId,
+        state: 'active',
+      },
+    );
+    await Promise.all([
+      access(join(session.bundlePath, 'input.json')),
+      access(join(session.bundlePath, 'package.lock.json')),
+      access(join(home, '.open-artifacts', 'registrations', `${session.instanceId}.json`)),
+    ]);
 
     const healthResponse = await globalThis.fetch(`${session.url}__oa/health`);
     assert.equal(healthResponse.status, 200);

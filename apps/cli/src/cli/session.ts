@@ -2,8 +2,10 @@ import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { readdir, readFile, rename, rm, stat, unlink, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { resolve } from 'node:path';
+import { isAbsolute, resolve } from 'node:path';
 import { promisify } from 'node:util';
+
+import { readInstanceBundle, setInstanceState } from '@open-artifacts/runtime';
 
 import type { ArtifactIdentity, RuntimeReadyState } from '../runtime/config.js';
 import { CliError } from './errors.js';
@@ -23,6 +25,7 @@ export interface ProcessSignature {
 
 export interface SessionRecord {
   artifact: ArtifactIdentity;
+  bundlePath: string;
   instanceId: string;
   pid: number;
   processSignature: ProcessSignature;
@@ -33,6 +36,8 @@ export interface SessionRecord {
 
 export interface ActiveSession {
   artifact: Omit<ArtifactIdentity, 'entryPath'>;
+  bundlePath: string;
+  instanceId: string;
   sessionId: string;
   startedAt: string;
   status: 'active';
@@ -94,9 +99,13 @@ export function parseSessionRecord(value: unknown): SessionRecord | undefined {
   const signature = value.processSignature;
   if (
     !isNonEmptyString(artifact.entryPath) ||
+    (artifact.format !== 'react-render/v0' && artifact.format !== 'react-runtime/v1') ||
     !isNonEmptyString(artifact.name) ||
     !isNonEmptyString(artifact.root) ||
     !isNonEmptyString(artifact.version) ||
+    !isNonEmptyString(value.bundlePath) ||
+    !isAbsolute(value.bundlePath as string) ||
+    !(value.bundlePath as string).endsWith('.openartifact') ||
     !isNonEmptyString(value.instanceId) ||
     !Number.isSafeInteger(value.pid) ||
     (value.pid as number) <= 0 ||
@@ -437,27 +446,45 @@ async function loadSessionRecord(sessionId: string): Promise<SessionRecordRead> 
 
 async function inspectSession(record: SessionRecord) {
   const processState = await readProcessSignatureState(record.pid);
-  if (processState.status === 'missing') return { status: 'prune' as const };
+  if (processState.status === 'missing') {
+    return { reconcileInstance: true, status: 'prune' as const };
+  }
   if (processState.status === 'unavailable') return { status: 'hidden' as const };
   if (!signaturesMatch(record.processSignature, processState.signature)) {
-    return { status: 'prune' as const };
+    return { reconcileInstance: true, status: 'prune' as const };
   }
 
   const readyState = await loadRuntimeReadyState(record.sessionId);
   if (readyState.status === 'unavailable') return { status: 'hidden' as const };
-  if (readyState.status !== 'found') return { status: 'prune' as const };
-  if (!readyMatchesRecord(record, readyState.ready)) return { status: 'prune' as const };
+  if (readyState.status !== 'found') {
+    return { reconcileInstance: false, status: 'prune' as const };
+  }
+  if (!readyMatchesRecord(record, readyState.ready)) {
+    return { reconcileInstance: false, status: 'prune' as const };
+  }
   const health = await readHealth(record);
   return { status: health.status === 'matching' ? ('active' as const) : ('hidden' as const) };
+}
+
+async function reconcilePrunedSession(record: SessionRecord) {
+  await readInstanceBundle(record.bundlePath)
+    .then((bundle) =>
+      bundle.instance.state === 'active' ? setInstanceState(bundle, 'stopped') : undefined,
+    )
+    .catch(() => undefined);
+  await removeSessionDirectory(record.sessionId);
 }
 
 function activeSessionFromRecord(record: SessionRecord): ActiveSession {
   return {
     artifact: {
       name: record.artifact.name,
+      format: record.artifact.format,
       root: record.artifact.root,
       version: record.artifact.version,
     },
+    bundlePath: record.bundlePath,
+    instanceId: record.instanceId,
     sessionId: record.sessionId,
     startedAt: record.startedAt,
     status: 'active',
@@ -479,7 +506,11 @@ export async function findActiveSessions(): Promise<ActiveSession[]> {
         if (recordState.status !== 'found') return undefined;
         const inspection = await inspectSession(recordState.record);
         if (inspection.status === 'prune') {
-          await removeSessionRecord(entry.name);
+          if (inspection.reconcileInstance) {
+            await reconcilePrunedSession(recordState.record);
+          } else {
+            await removeSessionRecord(entry.name);
+          }
           return undefined;
         }
         if (inspection.status === 'hidden') return undefined;
@@ -494,6 +525,27 @@ export async function findActiveSessions(): Promise<ActiveSession[]> {
         left.startedAt.localeCompare(right.startedAt) ||
         left.sessionId.localeCompare(right.sessionId),
     );
+}
+
+export async function findActiveSessionRecordByInstanceId(
+  instanceId: string,
+): Promise<SessionRecord | undefined> {
+  const entries = await readdir(sessionsRoot(), { withFileTypes: true }).catch(() => []);
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const recordState = await loadSessionRecord(entry.name);
+    if (recordState.status !== 'found' || recordState.record.instanceId !== instanceId) continue;
+    const inspection = await inspectSession(recordState.record);
+    if (inspection.status === 'active') return recordState.record;
+    if (inspection.status === 'prune') {
+      if (inspection.reconcileInstance) {
+        await reconcilePrunedSession(recordState.record);
+      } else {
+        await removeSessionRecord(entry.name);
+      }
+    }
+  }
+  return undefined;
 }
 
 export async function listArtifactSessions(options: SessionCommandOptions) {
@@ -568,7 +620,7 @@ export async function requestRuntimeShutdown(
   }
 }
 
-async function readInstanceToken(sessionId: string) {
+export async function readInstanceToken(sessionId: string) {
   try {
     const token = (
       await readFile(resolve(sessionDirectory(sessionId), 'instance.secret'), 'utf8')
@@ -726,6 +778,7 @@ export async function stopArtifactSession(sessionId: string, options: SessionCom
     );
   }
 
+  await setInstanceState(await readInstanceBundle(record.bundlePath), 'stopped');
   await removeSessionDirectory(sessionId);
   const result = { sessionId, status: 'stopped' as const };
   process.stdout.write(

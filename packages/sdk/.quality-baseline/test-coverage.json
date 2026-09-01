@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "module": "packages/sdk",
+  "command": "npm run test",
+  "status": "measured",
+  "files": 2,
+  "coverage": {
+    "statements": {
+      "covered": 72,
+      "pct": 97.3,
+      "total": 74
+    },
+    "branches": {
+      "covered": 12,
+      "pct": 80,
+      "total": 15
+    },
+    "functions": {
+      "covered": 4,
+      "pct": 66.67,
+      "total": 6
+    },
+    "lines": {
+      "covered": 72,
+      "pct": 97.3,
+      "total": 74
+    }
+  }
+}

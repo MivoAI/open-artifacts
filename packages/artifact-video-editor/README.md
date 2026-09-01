@@ -1,14 +1,18 @@
-# Video Editor Render
+# Video Editor Artifact Package
 
-An original Open Artifacts editing surface that lets an Agent and a person inspect the same real
-video, playback state, playhead, and selection. The viewport is divided into a project bar, Agent
-surface, media library, and preview/timeline workspace.
+This Package defines a small source-first video editing Artifact. Its named `activate` export binds
+authoritative Instance Data at `project.json`, registers the `timeline.read` and `timeline.trim`
+Artifact Tools, and registers the `video.clip-range` Annotation Target Provider. The default export
+renders the same Data through the Artifact UI.
 
-The Artifact Input shape is `{ project, agent, media, timeline, brief }`. The Brief selects one or
-more editing treatments, a target platform, and an aspect ratio from the finite options in
-`input.schema.json`; a complete input is in `example.json`. The default export accepts only
-`{ data }`. React is supplied as a peer dependency, while the source, scoped CSS, and demo media are
-owned by this package.
+The Artifact Input shape is `{ project, media, timeline, delivery }`. It initializes one source
+asset, one video track, and one clip. Authoritative time ranges use integer microseconds. Runtime
+renders receive `{ oa, input }`; `{ data }` remains available only as a compatibility path for the
+legacy source preview. React and `@open-artifacts/sdk` are peer dependencies.
+
+Playback position, hover, and the current time-range Selection remain local UI state. A successful
+`timeline.trim` commits a new `project.json` revision through the SDK Data Binding, and Binding
+subscribers update the visible clip range without a page reload.
 
 ## Demo media
 

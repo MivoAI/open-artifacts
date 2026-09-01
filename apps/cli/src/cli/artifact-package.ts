@@ -1,6 +1,7 @@
 import { mkdtemp, readFile, realpath, rm, stat } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
-import { isAbsolute, relative, resolve, win32 } from 'node:path';
+import { dirname, isAbsolute, relative, resolve, win32 } from 'node:path';
 
 import Ajv2020Import from 'ajv/dist/2020.js';
 import type { AnySchema, ErrorObject, ValidateFunction } from 'ajv';
@@ -16,6 +17,9 @@ import { reactResolutionRoot } from '../runtime/react.js';
 import { ArtifactPackageContractError, ArtifactReferenceError, type CliIssue } from './errors.js';
 
 const inputSchemaDraft = 'https://json-schema.org/draft/2020-12/schema';
+const require = createRequire(import.meta.url);
+const sdkEntry = require.resolve('@open-artifacts/sdk');
+const sdkReactEntry = require.resolve('@open-artifacts/sdk/react');
 const fixedResources = [
   'src/index.tsx',
   'input.schema.json',
@@ -47,6 +51,7 @@ export const artifactPackageManifestSchema = {
       required: ['.', './schema', './example', './package.json'],
       properties: {
         '.': { const: './src/index.tsx' },
+        './activate': { const: './src/activate.ts' },
         './schema': { const: './input.schema.json' },
         './example': { const: './example.json' },
         './package.json': { const: './package.json' },
@@ -56,7 +61,11 @@ export const artifactPackageManifestSchema = {
       type: 'object',
       additionalProperties: false,
       required: ['format'],
-      properties: { format: { const: 'react-render/v0' } },
+      properties: {
+        format: {
+          enum: ['react-render/v0', 'react-runtime/v1'],
+        },
+      },
     },
     peerDependencies: {
       type: 'object',
@@ -72,7 +81,13 @@ export const artifactPackageManifestSchema = {
 } as const;
 
 interface ArtifactManifest {
+  exports: {
+    './activate'?: string;
+  };
   name: string;
+  openArtifacts: {
+    format: 'react-render/v0' | 'react-runtime/v1';
+  };
   version: string;
 }
 
@@ -216,6 +231,25 @@ async function validateArtifactSource(entryPath: string) {
   }
 }
 
+async function validateActivationSource(activationPath: string) {
+  try {
+    const source = await readFile(activationPath, 'utf8');
+    const transformed = await transformWithOxc(source, activationPath);
+    await initModuleLexer;
+    const [, exports] = parseModule(transformed.code);
+    if (!exports.some((exported) => exported.n === 'activate')) {
+      throw new Error('missing activate export');
+    }
+  } catch {
+    throw new ArtifactPackageContractError([
+      {
+        path: '$.exports["./activate"]',
+        message: 'must contain valid server-safe TypeScript Source with an activate export',
+      },
+    ]);
+  }
+}
+
 function isArtifactRenderType(value: unknown) {
   if (typeof value === 'function') return true;
   if (!value || typeof value !== 'object') return false;
@@ -239,11 +273,19 @@ async function smokeRenderArtifactSource(
       cacheDir: cacheDirectory,
       clearScreen: false,
       logLevel: 'silent',
-      resolve: { dedupe: ['react', 'react-dom'] },
+      resolve: {
+        alias: [
+          { find: '@open-artifacts/sdk/react', replacement: sdkReactEntry },
+          { find: '@open-artifacts/sdk', replacement: sdkEntry },
+        ],
+        dedupe: ['react', 'react-dom'],
+      },
       root: runtimeRoot,
       server: {
         middlewareMode: true,
-        fs: { allow: [artifactRoot, dependencyRoot, runtimeRoot] },
+        fs: {
+          allow: [artifactRoot, dependencyRoot, dirname(sdkEntry), runtimeRoot],
+        },
       },
     });
     const artifactModule = (await server.ssrLoadModule(`/@fs/${normalizePath(entryPath)}`)) as {
@@ -321,6 +363,27 @@ export async function resolveLocalArtifactPackage(
   const manifest = manifestValue as ArtifactManifest;
   const resources = await requireFixedResources(root);
   await validateArtifactSource(resources['src/index.tsx']);
+  let activationPath: string | undefined;
+  if (manifest.openArtifacts.format === 'react-runtime/v1') {
+    if (manifest.exports['./activate'] !== './src/activate.ts') {
+      throw new ArtifactPackageContractError([
+        {
+          path: '$.exports["./activate"]',
+          message: 'must equal ./src/activate.ts for react-runtime/v1',
+        },
+      ]);
+    }
+    activationPath = await resolvePackageFile(root, manifest.exports['./activate']);
+    if (!activationPath) {
+      throw new ArtifactPackageContractError([
+        {
+          path: '$.exports["./activate"]',
+          message: 'must exist as a file inside the Artifact Package',
+        },
+      ]);
+    }
+    await validateActivationSource(activationPath);
+  }
 
   const schema = await readJson(resources['input.schema.json'], '$.inputContract');
   if (
@@ -371,8 +434,10 @@ export async function resolveLocalArtifactPackage(
   return {
     exampleInput,
     identity: {
+      ...(activationPath ? { activationPath } : {}),
       ...(options.dependencyRoot ? { dependencyRoot: options.dependencyRoot } : {}),
       entryPath: resources['src/index.tsx'],
+      format: manifest.openArtifacts.format,
       name: manifest.name,
       root,
       version: manifest.version,

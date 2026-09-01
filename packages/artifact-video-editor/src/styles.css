@@ -1,785 +1,440 @@
-.oa-video-editor {
-  --ve-bg: #090d14;
-  --ve-panel: #101620;
-  --ve-panel-raised: #151d29;
-  --ve-ink: #eef5f8;
-  --ve-muted: #82909f;
-  --ve-line: #26303d;
-  --ve-accent: #a8f04b;
-  --ve-blue: #46a9ff;
-  position: relative;
-  width: 100%;
-  min-width: 1080px;
-  height: 100vh;
-  min-height: 680px;
-  overflow: hidden;
-  background: var(--ve-bg);
-  color: var(--ve-ink);
-  font-family: Inter, 'Avenir Next', Avenir, 'Segoe UI', sans-serif;
+:root {
+  color: #18222e;
+  background: #edf0f3;
+  font-family:
+    Inter,
+    ui-sans-serif,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
 }
 
-@scope (.oa-video-editor) {
-  * {
-    box-sizing: border-box;
-  }
+* {
+  box-sizing: border-box;
+}
 
-  button,
-  input,
-  select {
-    font: inherit;
-  }
+button,
+input {
+  font: inherit;
+}
 
-  button {
-    border: 0;
-    color: inherit;
-    cursor: pointer;
-  }
+button {
+  cursor: pointer;
+}
 
-  .ve-project-bar {
-    display: grid;
-    height: 58px;
-    align-items: center;
-    border-bottom: 1px solid var(--ve-line);
-    background: #0d131c;
-    grid-template-columns: 340px 1fr auto;
-  }
+.oa-video-editor {
+  display: grid;
+  grid-template-rows: 4.5rem minmax(0, 1fr);
+  width: 100%;
+  min-width: 0;
+  height: 100vh;
+  min-height: 40rem;
+  overflow: hidden;
+  color: #17212b;
+  background: #e8ecef;
+}
 
-  .ve-brand,
-  .ve-project-identity,
-  .ve-project-actions {
-    display: flex;
-    align-items: center;
-  }
+.ve-empty {
+  place-items: center;
+}
 
-  .ve-brand {
-    gap: 11px;
-    height: 100%;
-    padding: 0 18px;
-    border-right: 1px solid var(--ve-line);
-    letter-spacing: -0.02em;
-  }
+.ve-project-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0 1.25rem;
+  color: #f8fafc;
+  background: #16202b;
+  border-bottom: 1px solid #303c48;
+}
 
-  .ve-brand-mark {
-    display: grid;
-    width: 28px;
-    height: 28px;
-    place-items: center;
-    border-radius: 8px 2px 8px 2px;
-    background: var(--ve-accent);
-    color: #10170b;
-    font-family: 'SFMono-Regular', Consolas, monospace;
-    font-size: 10px;
-    font-weight: 800;
-  }
+.ve-project-bar h1,
+.ve-project-bar small,
+.ve-project-bar strong,
+.ve-project-bar span {
+  display: block;
+}
 
-  .ve-project-identity {
-    gap: 14px;
-    padding-left: 22px;
-  }
+.ve-project-bar h1 {
+  margin: 0.2rem 0 0;
+  font-size: 1rem;
+}
 
-  .ve-project-identity small,
-  .ve-panel-heading small,
-  .ve-preview-heading small,
-  .ve-brief-label,
-  .ve-library-footnote span {
-    color: var(--ve-muted);
-    font-family: 'SFMono-Regular', Consolas, monospace;
-    font-size: 9px;
-    letter-spacing: 0.09em;
-    text-transform: uppercase;
-  }
+.ve-project-bar small,
+.ve-authority-state span {
+  color: #98a7b6;
+  font-size: 0.68rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
 
-  .ve-project-identity h1 {
-    margin: 0;
-    font-size: 14px;
-    font-weight: 620;
-  }
+.ve-authority-state {
+  display: grid;
+  grid-template-columns: repeat(3, auto);
+  align-items: center;
+  gap: 0.55rem;
+  font-size: 0.72rem;
+}
 
-  .ve-project-actions {
-    gap: 8px;
-    padding-right: 12px;
-  }
+.ve-authority-state strong {
+  color: #8de4b1;
+}
 
-  .ve-project-actions button {
-    height: 32px;
-    padding: 0 13px;
-    border: 1px solid var(--ve-line);
-    border-radius: 5px;
-    background: #131a24;
-    font-size: 11px;
-  }
+.ve-authority-state code {
+  color: #cbd5df;
+}
 
-  .ve-project-actions .ve-primary-action {
-    border-color: var(--ve-accent);
-    background: var(--ve-accent);
-    color: #11180c;
-    font-weight: 700;
-  }
+.ve-editor-grid {
+  display: grid;
+  grid-template-columns: 14.5rem minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+}
 
-  .ve-save-state {
-    margin-right: 6px;
-    color: #7f8c9b;
-    font-size: 10px;
-  }
+.ve-media-library {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
+  padding: 1rem;
+  overflow: auto;
+  background: #f7f8f9;
+  border-right: 1px solid #ccd3da;
+}
 
-  .ve-save-state::before {
-    display: inline-block;
-    width: 5px;
-    height: 5px;
-    margin-right: 7px;
-    border-radius: 50%;
-    background: var(--ve-accent);
-    content: '';
-    vertical-align: 1px;
+.ve-panel-heading,
+.ve-preview-heading,
+.ve-timeline-toolbar,
+.ve-selection-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.ve-panel-heading small,
+.ve-preview-heading small,
+.ve-timeline-toolbar small,
+.ve-delivery small {
+  display: block;
+  margin-bottom: 0.2rem;
+  color: #72808e;
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ve-panel-heading > span {
+  color: #697684;
+  font-size: 0.72rem;
+}
+
+.ve-media-card {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.6rem;
+  background: white;
+  border: 1px solid #cad2d9;
+  border-radius: 0.55rem;
+}
+
+.ve-media-card > span,
+.ve-delivery span {
+  color: #687684;
+  font-size: 0.72rem;
+}
+
+.ve-media-thumbnail {
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: 16 / 10;
+  background: #101820;
+  border-radius: 0.35rem;
+}
+
+.ve-media-thumbnail video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ve-media-thumbnail span {
+  position: absolute;
+  right: 0.35rem;
+  bottom: 0.35rem;
+  padding: 0.16rem 0.3rem;
+  color: white;
+  background: rgb(6 12 18 / 78%);
+  border-radius: 0.2rem;
+  font:
+    0.62rem ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+}
+
+.ve-delivery {
+  display: grid;
+  gap: 0.25rem;
+  margin-top: auto;
+  padding-top: 1rem;
+  border-top: 1px solid #d7dde2;
+}
+
+.ve-editor-workspace {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) 15rem;
+  min-width: 0;
+  min-height: 0;
+}
+
+.ve-preview-stage {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 0.7rem;
+  min-height: 0;
+  padding: 0.9rem 1rem;
+  background: #222b34;
+  color: #f6f8fa;
+}
+
+.ve-preview-heading span,
+.ve-transport span {
+  color: #a9b5c0;
+  font:
+    0.7rem ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+}
+
+.ve-video-shell {
+  display: grid;
+  min-height: 0;
+  place-items: center;
+}
+
+.ve-video-frame {
+  max-width: 100%;
+  max-height: 100%;
+  overflow: hidden;
+  background: #080d12;
+  border: 1px solid #46525e;
+  border-radius: 0.35rem;
+}
+
+.ve-video-frame video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.ve-transport {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+}
+
+.ve-transport span:last-child {
+  text-align: right;
+}
+
+.ve-play-toggle {
+  width: 2.2rem;
+  height: 2.2rem;
+  color: #14202b;
+  background: #f5f7f8;
+  border: 0;
+  border-radius: 50%;
+}
+
+.ve-timeline-panel {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  padding: 0.8rem 1rem 1rem;
+  overflow: hidden;
+  background: #f7f8f9;
+  border-top: 1px solid #bbc4cc;
+}
+
+.ve-timeline-toolbar code {
+  color: #344452;
+  font-size: 0.72rem;
+}
+
+.ve-selection-toolbar {
+  padding: 0.55rem 0;
+  color: #566572;
+  font:
+    0.7rem ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+}
+
+.ve-selection-toolbar div {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.ve-selection-toolbar button {
+  min-height: 2rem;
+  padding: 0 0.65rem;
+  color: #344452;
+  background: white;
+  border: 1px solid #bdc7cf;
+  border-radius: 0.35rem;
+}
+
+.ve-timeline-canvas {
+  display: grid;
+  grid-template-columns: 7rem minmax(0, 1fr);
+  min-height: 5rem;
+  overflow: hidden;
+  border: 1px solid #c6ced5;
+  border-radius: 0.45rem;
+}
+
+.ve-track-label {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.7rem;
+  background: #e6ebef;
+  border-right: 1px solid #c6ced5;
+}
+
+.ve-track-label span {
+  display: grid;
+  width: 1.8rem;
+  height: 1.8rem;
+  place-items: center;
+  color: white;
+  background: #6c5ce7;
+  border-radius: 0.28rem;
+  font-size: 0.65rem;
+}
+
+.ve-track-label strong {
+  overflow: hidden;
+  font-size: 0.72rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ve-track-lane {
+  position: relative;
+  min-width: 0;
+  background:
+    linear-gradient(90deg, rgb(125 139 151 / 14%) 1px, transparent 1px) 0 0 / 10% 100%,
+    #eef2f4;
+}
+
+.ve-timeline-clip {
+  position: absolute;
+  top: 0.7rem;
+  bottom: 0.7rem;
+  z-index: 4;
+  display: grid;
+  grid-template-columns: 2.5rem minmax(0, 1fr);
+  grid-template-rows: 1fr auto;
+  gap: 0 0.55rem;
+  min-width: 3rem;
+  padding: 0.45rem;
+  overflow: hidden;
+  color: #f8f7ff;
+  text-align: left;
+  background: #6254cf;
+  border: 2px solid #8378e5;
+  border-radius: 0.38rem;
+}
+
+.ve-timeline-clip:hover,
+.ve-timeline-clip:focus-visible {
+  border-color: #f1b84b;
+  outline: 2px solid rgb(241 184 75 / 34%);
+  outline-offset: 2px;
+}
+
+.ve-timeline-clip strong,
+.ve-timeline-clip small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ve-timeline-clip small {
+  color: #dedafd;
+  font-size: 0.6rem;
+}
+
+.ve-clip-filmstrip {
+  grid-row: 1 / 3;
+  background:
+    linear-gradient(135deg, transparent 45%, rgb(255 255 255 / 38%) 46% 54%, transparent 55%),
+    #40379a;
+  border-radius: 0.2rem;
+}
+
+.ve-playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 2;
+  width: 1px;
+  pointer-events: none;
+  background: #ee625a;
+}
+
+.ve-playhead span {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 0.55rem;
+  height: 0.55rem;
+  background: #ee625a;
+  transform: translate(-50%, -35%) rotate(45deg);
+}
+
+.ve-scrubber {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  width: 100%;
+  height: 100%;
+  cursor: ew-resize;
+  opacity: 0;
+}
+
+@media (max-width: 760px) {
+  .oa-video-editor {
+    min-height: 48rem;
+    overflow: auto;
   }
 
   .ve-editor-grid {
-    display: grid;
-    height: calc(100% - 58px);
-    min-height: 622px;
-    grid-template-columns: 340px 270px minmax(470px, 1fr);
+    grid-template-columns: 1fr;
   }
 
-  .ve-agent-surface,
   .ve-media-library {
-    display: flex;
-    min-width: 0;
-    flex-direction: column;
-    border-right: 1px solid var(--ve-line);
-    background: var(--ve-panel);
-    overflow: hidden;
+    display: none;
   }
 
-  .ve-panel-heading,
-  .ve-preview-heading {
-    display: flex;
-    height: 58px;
-    flex: 0 0 auto;
-    align-items: center;
-    gap: 10px;
-    padding: 0 16px;
-    border-bottom: 1px solid var(--ve-line);
+  .ve-authority-state span {
+    display: none;
   }
+}
 
-  .ve-panel-heading > div,
-  .ve-preview-heading > div {
-    display: grid;
-    gap: 4px;
-  }
-
-  .ve-panel-heading strong,
-  .ve-preview-heading strong {
-    font-size: 12px;
-  }
-
-  .ve-agent-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--ve-accent);
-    box-shadow: 0 0 0 4px rgb(168 240 75 / 10%);
-  }
-
-  .ve-agent-body {
-    display: flex;
-    flex: 1 1 auto;
-    min-height: 0;
-    flex-direction: column;
-    overflow-y: auto;
-  }
-
-  .ve-agent-brief {
-    padding: 18px 20px 14px;
-  }
-
-  .ve-brief-label {
-    color: var(--ve-accent);
-  }
-
-  .ve-agent-brief h2 {
-    max-width: 270px;
-    margin: 10px 0 8px;
-    font-size: 21px;
-    font-weight: 580;
-    letter-spacing: -0.04em;
-    line-height: 1.05;
-  }
-
-  .ve-agent-brief > p {
-    margin: 0;
-    color: #9aa6b3;
-    font-size: 12px;
-    line-height: 1.65;
-  }
-
-  .ve-agent-brief ol {
-    display: grid;
-    gap: 0;
-    margin: 12px 0 0;
-    padding: 0;
-    border-top: 1px solid var(--ve-line);
-    list-style: none;
-  }
-
-  .ve-agent-brief li {
-    display: grid;
-    min-height: 34px;
-    align-items: center;
-    border-bottom: 1px solid var(--ve-line);
-    color: #c5ced7;
-    font-size: 9px;
-    line-height: 1.35;
-    grid-template-columns: 26px 1fr;
-  }
-
-  .ve-agent-brief li span {
-    color: #65717f;
-    font-family: 'SFMono-Regular', Consolas, monospace;
-    font-size: 8px;
-  }
-
-  .ve-agent-composer {
-    flex: 0 0 auto;
-    margin: 10px 14px 14px;
-    padding: 14px;
-    border: 1px solid #313d4c;
-    border-radius: 8px;
-    background: var(--ve-panel-raised);
-  }
-
-  .ve-agent-composer fieldset {
-    display: flex;
-    gap: 6px;
-    margin: 12px 0;
-    padding: 0;
-    border: 0;
-  }
-
-  .ve-agent-composer > p {
-    margin: 8px 0 0;
-    color: #778493;
-    font-size: 9px;
-    line-height: 1.4;
-  }
-
-  .ve-agent-composer legend,
-  .ve-agent-composer > label {
-    color: #8f9baa;
-    font-size: 9px;
-  }
-
-  .ve-agent-composer fieldset label {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    color: #c8d1da;
-    font-size: 9px;
-  }
-
-  .ve-agent-composer input {
-    accent-color: var(--ve-accent);
-  }
-
-  .ve-agent-composer > label {
-    display: grid;
-    gap: 5px;
-    margin-top: 8px;
-  }
-
-  .ve-agent-composer select {
-    width: 100%;
-    height: 28px;
-    padding: 0 7px;
-    border: 1px solid #354252;
-    border-radius: 4px;
-    background: #0e151e;
-    color: var(--ve-ink);
-    font-size: 10px;
-  }
-
-  .ve-agent-composer button {
-    width: 100%;
-    height: 30px;
-    margin-top: 12px;
-    border-radius: 4px;
-    background: var(--ve-accent);
-    color: #15200d;
-    font-size: 10px;
-    font-weight: 700;
-  }
-
-  .ve-agent-composer button:disabled {
-    cursor: not-allowed;
-    opacity: 0.45;
-  }
-
-  .ve-conversation {
-    display: grid;
-    gap: 8px;
-    padding: 0 14px;
-  }
-
-  .ve-conversation article {
-    display: grid;
-    gap: 4px;
-    padding: 10px 12px;
-    border-left: 2px solid var(--ve-accent);
-    background: #151e29;
-  }
-
-  .ve-conversation small,
-  .ve-conversation span {
-    color: #7f8d9c;
-    font-size: 9px;
-  }
-
-  .ve-conversation strong {
-    font-size: 10px;
-  }
-
-  .ve-library-heading {
-    justify-content: space-between;
-  }
-
-  .ve-library-heading button {
-    width: 27px;
-    height: 27px;
-    border: 1px solid #344050;
-    border-radius: 5px;
-    background: #1b2430;
-  }
-
-  .ve-library-tools {
-    display: flex;
-    height: 42px;
-    flex: 0 0 auto;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 14px;
-    border-bottom: 1px solid var(--ve-line);
-    color: #768392;
-    font-size: 9px;
-  }
-
-  .ve-library-tools button {
-    padding: 0;
-    background: transparent;
-    color: #8a97a5;
-    font-size: 9px;
-  }
-
-  .ve-media-card {
-    margin: 14px;
-    padding: 6px;
-    border: 1px solid transparent;
-    border-radius: 7px;
-    outline: 0;
-    cursor: pointer;
-  }
-
-  .ve-media-card:hover,
-  .ve-media-card:focus-visible {
-    background: #18212d;
-  }
-
-  .ve-media-card.is-selected {
-    border-color: var(--ve-blue);
-    background: rgb(70 169 255 / 9%);
-    box-shadow: 0 0 0 1px rgb(70 169 255 / 20%);
-  }
-
-  .ve-media-thumbnail {
-    position: relative;
-    aspect-ratio: 16 / 10;
-    overflow: hidden;
-    border-radius: 4px;
-    background: #05070b;
-  }
-
-  .ve-media-thumbnail video {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-
-  .ve-media-thumbnail span {
-    position: absolute;
-    right: 6px;
-    bottom: 6px;
-    padding: 3px 5px;
-    border-radius: 3px;
-    background: rgb(6 9 13 / 76%);
-    font-family: 'SFMono-Regular', Consolas, monospace;
-    font-size: 8px;
-  }
-
-  .ve-media-meta {
-    display: grid;
-    gap: 4px;
-    padding: 10px 3px 5px;
-  }
-
-  .ve-media-meta strong {
-    overflow: hidden;
-    font-size: 11px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .ve-media-meta span {
-    color: #748190;
-    font-size: 9px;
-  }
-
-  .ve-library-footnote {
-    display: grid;
-    gap: 6px;
-    margin: auto 14px 14px;
-    padding-top: 14px;
-    border-top: 1px solid var(--ve-line);
-  }
-
-  .ve-library-footnote code {
-    overflow: hidden;
-    color: #748190;
-    font-size: 9px;
-    text-overflow: ellipsis;
-  }
-
-  .ve-editor-workspace {
-    display: grid;
-    min-width: 0;
-    min-height: 0;
-    background: #080c12;
-    grid-template-rows: minmax(350px, 61%) minmax(250px, 39%);
-  }
-
-  .ve-preview-stage {
-    display: grid;
-    min-height: 0;
-    border-bottom: 1px solid var(--ve-line);
-    grid-template-rows: 58px minmax(0, 1fr) 46px;
-  }
-
-  .ve-preview-heading {
-    justify-content: space-between;
-    background: #0d131c;
-  }
-
-  .ve-preview-heading > span {
-    color: #687584;
-    font-size: 9px;
-  }
-
-  .ve-video-shell {
-    display: grid;
-    min-height: 0;
-    place-items: center;
-    padding: 20px 26px;
-    background: radial-gradient(circle at center, rgb(70 169 255 / 5%), transparent 55%), #070a0f;
-  }
-
-  .ve-video-frame {
-    width: auto;
-    max-width: 100%;
-    height: 100%;
-    max-height: 100%;
-    overflow: hidden;
-    border-radius: 2px;
-    outline: 1px solid #252e3a;
-    background: #000;
-    box-shadow: 0 16px 45px rgb(0 0 0 / 45%);
-  }
-
-  .ve-video-frame video {
-    display: block;
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-  }
-
-  .ve-transport {
-    display: grid;
-    align-items: center;
-    border-top: 1px solid var(--ve-line);
-    background: #0d131c;
-    grid-template-columns: 1fr 54px 1fr;
-  }
-
-  .ve-transport span {
-    color: #73808e;
-    font-family: 'SFMono-Regular', Consolas, monospace;
-    font-size: 9px;
-  }
-
-  .ve-transport span:first-child {
-    padding-left: 18px;
-  }
-
-  .ve-transport span:last-child {
-    padding-right: 18px;
-    text-align: right;
-  }
-
-  .ve-play-toggle {
-    width: 34px;
-    height: 28px;
-    justify-self: center;
-    border-radius: 5px;
-    background: var(--ve-ink);
-    color: #10151d !important;
-    font-size: 11px;
-  }
-
-  .ve-timeline-panel {
-    display: grid;
-    min-height: 0;
-    background: #0d131c;
-    grid-template-rows: 42px 28px minmax(0, 1fr);
-  }
-
-  .ve-timeline-toolbar {
-    display: grid;
-    align-items: center;
-    padding: 0 13px;
-    border-bottom: 1px solid var(--ve-line);
-    grid-template-columns: 1fr auto 1fr;
-  }
-
-  .ve-timeline-toolbar > div {
-    display: flex;
-    gap: 6px;
-  }
-
-  .ve-timeline-toolbar button {
-    padding: 5px 7px;
-    border-radius: 3px;
-    background: #18212c;
-    color: #8592a0;
-    font-size: 9px;
-  }
-
-  .ve-timeline-toolbar strong {
-    font-family: 'SFMono-Regular', Consolas, monospace;
-    font-size: 12px;
-    font-weight: 500;
-  }
-
-  .ve-timeline-toolbar > span {
-    justify-self: end;
-    color: #687584;
-    font-size: 9px;
-  }
-
-  .ve-ruler {
-    display: grid;
-    align-items: end;
-    padding: 0 12px 5px 112px;
-    border-bottom: 1px solid #202936;
-    color: #546170;
-    font-family: 'SFMono-Regular', Consolas, monospace;
-    font-size: 8px;
-    grid-template-columns: repeat(4, 1fr);
-  }
-
-  .ve-ruler span:not(:first-child) {
-    text-align: right;
-  }
-
-  .ve-timeline-canvas {
-    display: grid;
-    min-height: 0;
-    grid-template-columns: 100px minmax(0, 1fr);
-  }
-
-  .ve-track-label {
-    display: grid;
-    align-content: start;
-    gap: 7px;
-    padding: 16px 12px;
-    border-right: 1px solid var(--ve-line);
-  }
-
-  .ve-track-label span {
-    width: max-content;
-    padding: 4px 6px;
-    border-radius: 3px;
-    background: var(--ve-blue);
-    color: #07121d;
-    font-family: 'SFMono-Regular', Consolas, monospace;
-    font-size: 9px;
-    font-weight: 800;
-  }
-
-  .ve-track-label strong {
-    color: #84919f;
-    font-size: 9px;
-    font-weight: 500;
-  }
-
-  .ve-track-lane {
-    position: relative;
-    min-width: 0;
-    padding: 14px 14px 0;
-    overflow: hidden;
-    background-image: linear-gradient(90deg, transparent 24.8%, #18212c 25%, transparent 25.2%);
-    background-size: 25% 100%;
-  }
-
-  .ve-track-lane ul {
-    position: absolute;
-    right: 14px;
-    bottom: 9px;
-    left: 14px;
-    display: flex;
-    gap: 5px;
-    margin: 0;
-    padding: 0;
-    list-style: none;
-  }
-
-  .ve-track-lane li {
-    padding: 3px 6px;
-    border: 1px solid #6158a4;
-    border-radius: 3px;
-    background: #292548;
-    color: #cfcaff;
-    font-size: 8px;
-  }
-
-  .ve-timeline-clip {
-    position: relative;
-    height: 78px;
-    overflow: hidden;
-    border: 1px solid #314052;
-    border-radius: 4px;
-    outline: 0;
-    background: #192432;
-    cursor: pointer;
-  }
-
-  .ve-timeline-clip:focus-visible,
-  .ve-timeline-clip.is-selected {
-    border-color: var(--ve-blue);
-    box-shadow: inset 0 0 0 1px var(--ve-blue);
-  }
-
-  .ve-clip-filmstrip {
-    height: 38px;
-    opacity: 0.62;
-    background:
-      linear-gradient(90deg, transparent 80%, #080b11 80%) 0 0 / 48px 100%,
-      linear-gradient(135deg, #35526b, #171f29 52%, #54708a);
-  }
-
-  .ve-timeline-clip strong,
-  .ve-timeline-clip > span {
-    position: absolute;
-    bottom: 8px;
-    font-size: 9px;
-  }
-
-  .ve-timeline-clip strong {
-    left: 9px;
-  }
-
-  .ve-timeline-clip > span {
-    right: 9px;
-    color: #788798;
-  }
-
-  .ve-playhead {
-    position: absolute;
-    z-index: 3;
-    top: 7px;
-    bottom: 0;
-    width: 1px;
-    background: var(--ve-accent);
-    pointer-events: none;
-  }
-
-  .ve-playhead > span {
-    position: absolute;
-    top: 0;
-    left: -5px;
-    width: 11px;
-    height: 11px;
-    clip-path: polygon(0 0, 100% 0, 50% 100%);
-    background: var(--ve-accent);
-  }
-
-  .ve-scrubber {
-    position: absolute;
-    z-index: 4;
-    top: 0;
-    right: 14px;
-    left: 14px;
-    width: calc(100% - 28px);
-    height: 16px;
-    margin: 0;
-    cursor: ew-resize;
-    opacity: 0;
-  }
-
-  .ve-export-dialog {
-    position: fixed;
-    inset: 0;
-    width: 280px;
-    height: max-content;
-    margin: auto;
-    padding: 20px;
-    border: 1px solid #3a4655;
-    border-radius: 8px;
-    background: #151d28;
-    color: var(--ve-ink);
-    box-shadow: 0 18px 60px rgb(0 0 0 / 55%);
-  }
-
-  .ve-export-dialog::backdrop {
-    background: rgb(3 6 10 / 72%);
-  }
-
-  .ve-export-dialog h2 {
-    margin: 10px 0 16px;
-    font-size: 20px;
-  }
-
-  .ve-export-dialog strong {
-    font-size: 12px;
-  }
-
-  .ve-export-dialog p {
-    margin: 8px 0 18px;
-    color: #98a5b2;
-    font-size: 11px;
-  }
-
-  .ve-export-dialog button {
-    width: 100%;
-    height: 30px;
-    border-radius: 4px;
-    background: var(--ve-accent);
-    color: #15200d;
-    font-size: 10px;
-    font-weight: 700;
-  }
-
-  @media (max-height: 760px) {
-    .ve-agent-brief {
-      padding-top: 14px;
-    }
-
-    .ve-agent-brief h2 {
-      margin-top: 10px;
-      font-size: 21px;
-    }
-
-    .ve-agent-brief ol {
-      margin-top: 15px;
-    }
-
-    .ve-agent-brief li {
-      min-height: 42px;
-    }
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
   }
 }

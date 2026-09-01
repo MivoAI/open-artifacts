@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 
-import { buildCli, repositoryRoot, runBuiltCli } from './helpers/cli.mjs';
+import { buildCli, repositoryRoot, runBuiltCli, stopSession } from './helpers/cli.mjs';
 
 async function createArtifactPackage(home, overrides = {}) {
   const root = join(home, overrides.directory ?? 'artifact');
@@ -70,17 +70,6 @@ async function sessionDirectories(home) {
   });
 }
 
-async function stopSession(home, sessionId) {
-  const sessionDirectory = join(home, '.open-artifacts', 'sessions', sessionId);
-  const record = JSON.parse(await readFile(join(sessionDirectory, 'record.json'), 'utf8'));
-  try {
-    process.kill(record.pid, 'SIGTERM');
-  } catch (error) {
-    if (error.code !== 'ESRCH') throw error;
-  }
-  await rm(sessionDirectory, { force: true, recursive: true });
-}
-
 function assertNoSessionProcessForHome(home) {
   const processes = spawnSync('/bin/ps', ['-axo', 'command='], { encoding: 'utf8' });
   assert.equal(processes.status, 0, processes.stderr);
@@ -137,7 +126,7 @@ test('oa run reports stable Artifact Package contract errors before process crea
 
   assert.equal(error.error.code, 'ARTIFACT_PACKAGE_CONTRACT_INVALID');
   assert.equal(error.error.kind, 'contract');
-  assert.match(error.error.message, /does not satisfy react-render\/v0/);
+  assert.match(error.error.message, /does not satisfy a supported Open Artifacts contract/);
   assert.ok(
     error.error.issues.some(
       (issue) => issue.path === '$.exports["."]' && issue.message.includes('./src/index.tsx'),

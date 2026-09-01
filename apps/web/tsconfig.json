@@ -16,6 +16,8 @@
   "include": ["src/**/*"],
   "references": [
     { "path": "../../packages/artifact-decision-board" },
-    { "path": "../../packages/artifact-evidence-trace" }
+    { "path": "../../packages/artifact-evidence-trace" },
+    { "path": "../../packages/artifact-markdown-editor" },
+    { "path": "../../packages/artifact-video-editor" }
   ]
 }

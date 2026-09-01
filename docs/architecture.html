@@ -1,0 +1,3105 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Open Artifacts 技术架构：Artifact Package 创建持久化 Artifact Instance，OA 围绕每个 Instance 提供 Data、Annotation 与 Tool 三项能力。"
+    />
+    <title>Open Artifacts · Artifact Instance 架构</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --canvas: #edf2f8;
+        --paper: #ffffff;
+        --paper-soft: #f7f9fd;
+        --ink: #132039;
+        --ink-soft: #58657c;
+        --ink-faint: #8994a7;
+        --line: #d4ddea;
+        --line-strong: #aebbd0;
+        --package: #7458e5;
+        --package-soft: #f0edff;
+        --instance: #0b8e77;
+        --instance-soft: #e8f7f2;
+        --agent: #1574ce;
+        --agent-soft: #eaf4ff;
+        --annotation: #cb7d0a;
+        --annotation-soft: #fff4d9;
+        --stopped: #65728a;
+        --archived: #86556a;
+        --archived-soft: #f8eef3;
+        --shadow: 0 24px 70px rgb(19 32 57 / 10%);
+        --radius-lg: 26px;
+        --radius-md: 18px;
+        --radius-sm: 12px;
+        font-family:
+          Inter,
+          ui-sans-serif,
+          -apple-system,
+          BlinkMacSystemFont,
+          'Segoe UI',
+          'PingFang SC',
+          'Hiragino Sans GB',
+          'Microsoft YaHei',
+          sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        min-width: 320px;
+        margin: 0;
+        background:
+          radial-gradient(circle at 1px 1px, rgb(89 108 144 / 13%) 1px, transparent 0) 0 0 / 22px
+            22px,
+          var(--canvas);
+        color: var(--ink);
+      }
+
+      button,
+      a {
+        color: inherit;
+        font: inherit;
+      }
+
+      :focus-visible {
+        outline: 3px solid rgb(21 116 206 / 28%);
+        outline-offset: 3px;
+      }
+
+      .mono,
+      code,
+      pre,
+      .page-state,
+      .brand-copy span,
+      .eyebrow,
+      .section-kicker,
+      .node-label,
+      .status-pill,
+      .flow-code,
+      .method-list,
+      .tree {
+        font-family: ui-monospace, 'SFMono-Regular', Menlo, Monaco, Consolas, monospace;
+      }
+
+      .page-shell {
+        width: min(1440px, calc(100% - 40px));
+        margin: 18px auto 72px;
+      }
+
+      .topbar {
+        position: sticky;
+        z-index: 50;
+        top: 12px;
+        display: flex;
+        min-height: 64px;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        padding: 10px 14px 10px 11px;
+        border: 1px solid rgb(212 221 234 / 92%);
+        border-radius: 18px;
+        background: rgb(255 255 255 / 89%);
+        box-shadow: 0 12px 34px rgb(19 32 57 / 8%);
+        backdrop-filter: blur(18px);
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        text-decoration: none;
+      }
+
+      .brand-mark {
+        display: grid;
+        width: 42px;
+        height: 42px;
+        place-items: center;
+        border-radius: 13px;
+        background: var(--ink);
+        color: #fff;
+        font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+        font-size: 13px;
+        font-weight: 900;
+        letter-spacing: -0.08em;
+      }
+
+      .brand-copy {
+        display: grid;
+        gap: 2px;
+      }
+
+      .brand-copy strong {
+        font-size: 14px;
+      }
+
+      .brand-copy span {
+        color: var(--ink-faint);
+        font-size: 10px;
+        letter-spacing: 0.11em;
+        text-transform: uppercase;
+      }
+
+      .topnav {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .topnav a {
+        padding: 9px 11px;
+        border-radius: 10px;
+        color: var(--ink-soft);
+        font-size: 13px;
+        text-decoration: none;
+      }
+
+      .topnav a:hover,
+      .topnav a[aria-current='page'] {
+        background: var(--paper-soft);
+        color: var(--ink);
+      }
+
+      .page-state {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 10px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        color: var(--ink-faint);
+        font-size: 10px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .page-state::before {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--instance);
+        content: '';
+      }
+
+      .hero {
+        display: grid;
+        grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+        gap: 48px;
+        align-items: end;
+        padding: 88px 22px 54px;
+      }
+
+      .eyebrow,
+      .section-kicker {
+        margin: 0 0 17px;
+        color: var(--agent);
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      .eyebrow::before,
+      .section-kicker::before {
+        display: inline-block;
+        width: 26px;
+        height: 2px;
+        margin: 0 10px 3px 0;
+        background: currentColor;
+        content: '';
+      }
+
+      h1 {
+        max-width: 940px;
+        margin: 0;
+        font-size: clamp(46px, 5.7vw, 80px);
+        font-weight: 790;
+        letter-spacing: -0.065em;
+        line-height: 0.99;
+      }
+
+      .hero-summary {
+        max-width: 860px;
+        margin: 28px 0 0;
+        color: var(--ink-soft);
+        font-size: clamp(16px, 1.35vw, 20px);
+        line-height: 1.78;
+      }
+
+      .invariant-list {
+        display: grid;
+        gap: 10px;
+      }
+
+      .invariant {
+        display: grid;
+        grid-template-columns: 30px 1fr;
+        gap: 12px;
+        align-items: start;
+        padding: 15px 16px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: rgb(255 255 255 / 75%);
+      }
+
+      .invariant b {
+        display: grid;
+        width: 30px;
+        height: 30px;
+        place-items: center;
+        border-radius: 9px;
+        background: var(--instance-soft);
+        color: var(--instance);
+        font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+        font-size: 10px;
+      }
+
+      .invariant strong {
+        display: block;
+        margin: 1px 0 5px;
+        font-size: 13px;
+      }
+
+      .invariant span {
+        color: var(--ink-soft);
+        font-size: 11px;
+        line-height: 1.55;
+      }
+
+      .section {
+        overflow: hidden;
+        scroll-margin-top: 94px;
+        margin-top: 26px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-lg);
+        background: var(--paper);
+        box-shadow: var(--shadow);
+      }
+
+      .section-heading {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(290px, 0.62fr);
+        gap: 28px;
+        align-items: end;
+        padding: 34px 38px 28px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .section-kicker {
+        margin-bottom: 11px;
+        color: var(--ink-faint);
+      }
+
+      h2 {
+        margin: 0;
+        font-size: clamp(29px, 2.8vw, 43px);
+        letter-spacing: -0.043em;
+        line-height: 1.08;
+      }
+
+      .section-heading > p {
+        margin: 0;
+        color: var(--ink-soft);
+        font-size: 13px;
+        line-height: 1.75;
+      }
+
+      .flow-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        padding: 14px 38px;
+        border-bottom: 1px solid var(--line);
+        background: var(--paper-soft);
+      }
+
+      .flow-toolbar > span {
+        margin-right: 4px;
+        color: var(--ink-faint);
+        font-size: 11px;
+      }
+
+      .flow-toolbar .tip-help {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        margin-right: 0;
+        margin-left: auto;
+      }
+
+      .tip-help::before {
+        display: grid;
+        width: 18px;
+        height: 18px;
+        place-items: center;
+        border: 1px solid var(--line-strong);
+        border-radius: 50%;
+        background: var(--paper);
+        color: var(--agent);
+        content: '?';
+        font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+        font-size: 10px;
+        font-weight: 800;
+      }
+
+      .flow-button {
+        padding: 8px 12px;
+        border: 1px solid transparent;
+        border-radius: 999px;
+        background: transparent;
+        color: var(--ink-soft);
+        cursor: pointer;
+        font-size: 12px;
+      }
+
+      .flow-button:hover {
+        border-color: var(--line);
+        background: var(--paper);
+      }
+
+      .flow-button[aria-pressed='true'] {
+        border-color: var(--line-strong);
+        background: var(--paper);
+        color: var(--ink);
+        box-shadow: 0 5px 18px rgb(19 32 57 / 8%);
+      }
+
+      .architecture-wrap {
+        overflow-x: auto;
+        padding: 28px 28px 0;
+      }
+
+      .architecture-map {
+        min-width: 1040px;
+        padding: 26px;
+        border: 1px solid var(--line);
+        border-radius: 22px;
+        background:
+          linear-gradient(rgb(89 108 144 / 7%) 1px, transparent 1px) 0 0 / 22px 22px,
+          linear-gradient(90deg, rgb(89 108 144 / 7%) 1px, transparent 1px) 0 0 / 22px 22px,
+          #fafcff;
+      }
+
+      .lane-grid,
+      .access-grid,
+      .source-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 24px;
+      }
+
+      .architecture-node,
+      .definition-card,
+      .state-card,
+      .interface-card,
+      .storage-card,
+      .scope-card {
+        position: relative;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: var(--paper);
+      }
+
+      .architecture-node {
+        min-height: 92px;
+        padding: 15px 42px 15px 16px;
+        box-shadow: 0 10px 26px rgb(19 32 57 / 8%);
+      }
+
+      .architecture-node strong,
+      .capability-card strong {
+        display: block;
+        margin: 5px 0;
+        font-size: 14px;
+      }
+
+      .architecture-node p,
+      .capability-card p {
+        margin: 0;
+        color: var(--ink-soft);
+        font-size: 10px;
+        line-height: 1.55;
+      }
+
+      .node-label {
+        color: var(--ink-faint);
+        font-size: 8px;
+        font-weight: 800;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+
+      .human-node {
+        border-top: 3px solid var(--ink);
+      }
+
+      .agent-node {
+        border-top: 3px solid var(--agent);
+      }
+
+      .connector-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 24px;
+        min-height: 54px;
+      }
+
+      .connector {
+        position: relative;
+        display: grid;
+        place-items: center;
+        color: var(--ink-faint);
+        font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+        font-size: 9px;
+      }
+
+      .connector::before {
+        position: absolute;
+        z-index: 0;
+        top: 0;
+        bottom: 0;
+        left: 50%;
+        width: 1px;
+        background: var(--line-strong);
+        content: '';
+      }
+
+      .connector::after {
+        position: absolute;
+        bottom: 0;
+        left: calc(50% - 4px);
+        width: 7px;
+        height: 7px;
+        border-right: 2px solid var(--line-strong);
+        border-bottom: 2px solid var(--line-strong);
+        content: '';
+        transform: rotate(45deg);
+      }
+
+      .connector span {
+        position: relative;
+        z-index: 1;
+        padding: 4px 8px;
+        border-radius: 7px;
+        background: rgb(255 255 255 / 92%);
+      }
+
+      .workbench-node,
+      .agent-interface-node {
+        background: var(--agent-soft);
+      }
+
+      .instance-arrow {
+        display: grid;
+        min-height: 62px;
+        place-items: center;
+        color: var(--ink-faint);
+        font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+        font-size: 9px;
+        text-align: center;
+      }
+
+      .instance-arrow span {
+        padding: 7px 10px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: var(--paper);
+      }
+
+      .instance-shell {
+        position: relative;
+        padding: 72px 20px 20px;
+        border: 2px solid var(--instance);
+        border-radius: 24px;
+        background: rgb(232 247 242 / 72%);
+        box-shadow: inset 0 0 0 7px rgb(255 255 255 / 36%);
+      }
+
+      .instance-title {
+        position: absolute;
+        top: 18px;
+        left: 22px;
+      }
+
+      .instance-title strong {
+        display: block;
+        margin-top: 4px;
+        font-size: 19px;
+      }
+
+      .instance-identity {
+        position: absolute;
+        top: 20px;
+        right: 22px;
+        padding: 7px 10px;
+        border: 1px solid rgb(11 142 119 / 26%);
+        border-radius: 9px;
+        background: rgb(255 255 255 / 72%);
+        color: var(--instance);
+        font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+        font-size: 9px;
+      }
+
+      .instance-content {
+        display: grid;
+        grid-template-columns: 0.72fr 2.28fr;
+        gap: 14px;
+      }
+
+      .manager-card {
+        min-height: 226px;
+        padding: 17px 42px 17px 17px;
+        border-color: rgb(11 142 119 / 25%);
+        background: rgb(255 255 255 / 76%);
+        box-shadow: none;
+      }
+
+      .manager-card .state-stack {
+        display: grid;
+        gap: 7px;
+        margin-top: 16px;
+      }
+
+      .state-chip {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 8px 9px;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        background: var(--paper);
+        color: var(--ink-soft);
+        font-size: 9px;
+      }
+
+      .state-chip.active {
+        border-color: rgb(11 142 119 / 24%);
+        color: var(--instance);
+      }
+
+      .state-chip.archived {
+        border-color: rgb(134 85 106 / 24%);
+        color: var(--archived);
+      }
+
+      .capability-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+      }
+
+      .capability-card {
+        position: relative;
+        min-height: 226px;
+        padding: 17px 42px 17px 17px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: var(--paper);
+      }
+
+      .capability-card ul {
+        display: grid;
+        gap: 8px;
+        margin: 18px 0 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .capability-card li {
+        padding-top: 8px;
+        border-top: 1px solid var(--line);
+        color: var(--ink-soft);
+        font-size: 9px;
+        line-height: 1.45;
+      }
+
+      .data-card {
+        border-top: 4px solid var(--instance);
+      }
+
+      .annotation-card {
+        border-top: 4px solid var(--annotation);
+      }
+
+      .tool-card {
+        border-top: 4px solid var(--agent);
+      }
+
+      .instance-rule {
+        display: grid;
+        grid-template-columns: 0.7fr 1fr 1fr 1fr;
+        gap: 10px;
+        margin-top: 14px;
+        padding: 11px 12px;
+        border: 1px dashed rgb(11 142 119 / 36%);
+        border-radius: 12px;
+        background: rgb(255 255 255 / 54%);
+        color: var(--ink-soft);
+        font-size: 9px;
+        text-align: center;
+      }
+
+      .instance-rule strong {
+        color: var(--instance);
+      }
+
+      .source-grid {
+        margin-top: 42px;
+      }
+
+      .source-grid::before {
+        position: absolute;
+        content: '';
+      }
+
+      .package-node {
+        border: 2px solid var(--package);
+        background: var(--package-soft);
+      }
+
+      .storage-node {
+        border: 2px solid var(--annotation);
+        background: var(--annotation-soft);
+      }
+
+      .node-token-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 12px;
+      }
+
+      .node-token-list span {
+        padding: 5px 7px;
+        border: 1px solid rgb(116 88 229 / 18%);
+        border-radius: 7px;
+        background: rgb(255 255 255 / 72%);
+        color: var(--ink-soft);
+        font-size: 9px;
+      }
+
+      .storage-node .node-token-list span {
+        border-color: rgb(203 125 10 / 20%);
+      }
+
+      .flow-target {
+        transition:
+          opacity 180ms ease,
+          transform 180ms ease,
+          box-shadow 180ms ease;
+      }
+
+      .architecture-map .is-muted {
+        opacity: 0.14;
+      }
+
+      .architecture-map .is-active {
+        opacity: 1;
+        transform: translateY(-2px);
+        box-shadow: 0 15px 34px rgb(19 32 57 / 14%);
+      }
+
+      .flow-note {
+        display: grid;
+        grid-template-columns: 170px 1fr auto;
+        gap: 18px;
+        align-items: center;
+        margin: 18px 28px 28px;
+        padding: 18px 20px;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: var(--paper-soft);
+      }
+
+      .flow-note small {
+        color: var(--ink-faint);
+        font-size: 10px;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+
+      .flow-note p {
+        margin: 0;
+        color: var(--ink-soft);
+        font-size: 13px;
+        line-height: 1.65;
+      }
+
+      .flow-code {
+        padding: 7px 9px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--paper);
+        color: var(--ink);
+        font-size: 9px;
+        white-space: nowrap;
+      }
+
+      .tip-host {
+        cursor: help;
+      }
+
+      .tip-trigger {
+        position: absolute;
+        z-index: 7;
+        top: 10px;
+        right: 10px;
+        display: grid;
+        width: 21px;
+        height: 21px;
+        padding: 0;
+        place-items: center;
+        border: 1px solid var(--line-strong);
+        border-radius: 50%;
+        background: rgb(255 255 255 / 90%);
+        color: var(--ink-faint);
+        cursor: help;
+        font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+        font-size: 10px;
+        font-weight: 800;
+        line-height: 1;
+        transition:
+          border-color 160ms ease,
+          background 160ms ease,
+          color 160ms ease,
+          transform 160ms ease;
+      }
+
+      .tip-trigger:hover,
+      .tip-host.tip-open > .tip-trigger,
+      .tip-trigger:focus-visible {
+        border-color: var(--agent);
+        background: var(--agent);
+        color: #fff;
+        transform: translateY(-1px);
+      }
+
+      .architecture-tooltip {
+        position: fixed;
+        z-index: 100;
+        width: min(340px, calc(100vw - 28px));
+        padding: 16px;
+        border: 1px solid #aebbd0;
+        border-radius: 15px;
+        background: rgb(255 255 255 / 98%);
+        box-shadow: 0 22px 50px rgb(19 32 57 / 22%);
+        pointer-events: none;
+        backdrop-filter: blur(14px);
+      }
+
+      .architecture-tooltip[hidden] {
+        display: none;
+      }
+
+      .architecture-tooltip > small,
+      .tooltip-example small {
+        display: block;
+        color: var(--ink-faint);
+        font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+        font-size: 8px;
+        font-weight: 800;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+
+      .architecture-tooltip > strong {
+        display: block;
+        margin: 6px 0 7px;
+        font-size: 15px;
+      }
+
+      .architecture-tooltip > p,
+      .tooltip-example p {
+        margin: 0;
+        color: var(--ink-soft);
+        font-size: 11px;
+        line-height: 1.58;
+      }
+
+      .tooltip-example {
+        margin-top: 12px;
+        padding: 11px 12px;
+        border-left: 3px solid var(--annotation);
+        border-radius: 0 10px 10px 0;
+        background: var(--annotation-soft);
+      }
+
+      .tooltip-example small {
+        margin-bottom: 5px;
+        color: var(--annotation);
+      }
+
+      .definition-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+      }
+
+      .definition-card {
+        min-height: 260px;
+        padding: 26px 48px 26px 26px;
+        border-width: 0 1px 0 0;
+        border-radius: 0;
+      }
+
+      .definition-card:last-child {
+        border-right: 0;
+      }
+
+      .definition-card small,
+      .state-card small,
+      .interface-card small,
+      .storage-card small,
+      .scope-card small {
+        color: var(--ink-faint);
+        font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+        font-size: 9px;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+      }
+
+      .definition-card h3,
+      .state-card h3,
+      .interface-card h3,
+      .storage-card h3,
+      .scope-card h3 {
+        margin: 14px 0 10px;
+        font-size: 21px;
+        letter-spacing: -0.03em;
+      }
+
+      .definition-card p,
+      .state-card p,
+      .interface-card p,
+      .storage-card p,
+      .scope-card p {
+        margin: 0;
+        color: var(--ink-soft);
+        font-size: 12px;
+        line-height: 1.7;
+      }
+
+      .definition-card code {
+        display: inline-block;
+        margin-top: 22px;
+        padding: 7px 9px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--paper-soft);
+        color: var(--ink);
+        font-size: 9px;
+      }
+
+      .package-definition {
+        box-shadow: inset 0 4px var(--package);
+      }
+
+      .instance-definition {
+        box-shadow: inset 0 4px var(--instance);
+      }
+
+      .runtime-definition {
+        box-shadow: inset 0 4px var(--stopped);
+      }
+
+      .ui-definition {
+        box-shadow: inset 0 4px var(--agent);
+      }
+
+      .lifecycle-body {
+        padding: 34px 38px 40px;
+      }
+
+      .lifecycle-track {
+        display: grid;
+        grid-template-columns: 1fr 120px 1fr 120px 1fr;
+        align-items: stretch;
+      }
+
+      .state-card {
+        min-height: 236px;
+        padding: 26px 48px 24px 24px;
+      }
+
+      .state-card.active {
+        border-color: rgb(11 142 119 / 34%);
+        background: var(--instance-soft);
+      }
+
+      .state-card.stopped {
+        background: var(--paper-soft);
+      }
+
+      .state-card.archived {
+        border-color: rgb(134 85 106 / 28%);
+        background: var(--archived-soft);
+      }
+
+      .status-pill {
+        display: inline-flex;
+        margin-top: 20px;
+        padding: 6px 8px;
+        border-radius: 7px;
+        background: rgb(255 255 255 / 76%);
+        color: var(--ink-soft);
+        font-size: 9px;
+      }
+
+      .transition {
+        display: grid;
+        place-items: center;
+        color: var(--ink-faint);
+        font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+        font-size: 9px;
+        text-align: center;
+      }
+
+      .transition div {
+        display: grid;
+        gap: 10px;
+      }
+
+      .transition span {
+        display: block;
+        padding: 5px 7px;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        background: var(--paper);
+      }
+
+      .lifecycle-rule {
+        margin: 24px 0 0;
+        padding: 15px 17px;
+        border-left: 3px solid var(--instance);
+        background: var(--paper-soft);
+        color: var(--ink-soft);
+        font-size: 12px;
+        line-height: 1.7;
+      }
+
+      .interfaces-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+      }
+
+      .data-entry-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+        padding: 26px 28px;
+        border-bottom: 1px solid var(--line);
+        background: var(--paper-soft);
+      }
+
+      .data-entry-card {
+        position: relative;
+        min-height: 150px;
+        padding: 18px 42px 18px 18px;
+        border: 1px solid var(--line);
+        border-top: 3px solid var(--instance);
+        border-radius: 13px;
+        background: var(--paper);
+      }
+
+      .data-entry-card strong {
+        display: block;
+        margin: 7px 0;
+        font-size: 14px;
+      }
+
+      .data-entry-card p {
+        margin: 0;
+        color: var(--ink-soft);
+        font-size: 10px;
+        line-height: 1.6;
+      }
+
+      .data-entry-card.binding-entry {
+        grid-column: 1 / -1;
+        min-height: 0;
+        border-top-color: var(--agent);
+      }
+
+      .data-authority-note {
+        grid-column: 1 / -1;
+        padding: 10px 14px;
+        border: 1px dashed rgb(11 142 119 / 34%);
+        border-radius: 11px;
+        background: rgb(232 247 242 / 68%);
+        color: var(--instance);
+        font-size: 10px;
+        text-align: center;
+      }
+
+      .interface-card {
+        min-height: 340px;
+        padding: 28px 50px 28px 28px;
+        border-width: 0 1px 0 0;
+        border-radius: 0;
+      }
+
+      .interface-card:last-child {
+        border-right: 0;
+      }
+
+      .interface-card.data-interface {
+        box-shadow: inset 0 4px var(--instance);
+      }
+
+      .interface-card.annotation-interface {
+        box-shadow: inset 0 4px var(--annotation);
+      }
+
+      .interface-card.tool-interface {
+        box-shadow: inset 0 4px var(--agent);
+      }
+
+      .method-list {
+        display: grid;
+        gap: 8px;
+        margin: 22px 0 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .method-list li {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 9px 10px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--paper-soft);
+        color: var(--ink);
+        font-size: 9px;
+      }
+
+      .method-list span {
+        color: var(--ink-faint);
+      }
+
+      .contract-intro-link {
+        color: var(--agent);
+        font-weight: 700;
+        text-underline-offset: 3px;
+      }
+
+      .contract-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        background:
+          linear-gradient(rgb(89 108 144 / 5%) 1px, transparent 1px) 0 0 / 22px 22px,
+          linear-gradient(90deg, rgb(89 108 144 / 5%) 1px, transparent 1px) 0 0 / 22px 22px,
+          var(--paper-soft);
+      }
+
+      .contract-card {
+        --contract-accent: var(--instance);
+        --contract-soft: var(--instance-soft);
+        position: relative;
+        min-width: 0;
+        padding: 30px 32px 32px;
+        border-right: 1px solid var(--line);
+        border-bottom: 1px solid var(--line);
+        background: rgb(255 255 255 / 88%);
+      }
+
+      .contract-card:nth-child(2n) {
+        border-right: 0;
+      }
+
+      .contract-card:nth-last-child(-n + 2) {
+        border-bottom: 0;
+      }
+
+      .contract-card.runtime-contract {
+        --contract-accent: var(--package);
+        --contract-soft: var(--package-soft);
+      }
+
+      .contract-card.data-contract {
+        --contract-accent: var(--instance);
+        --contract-soft: var(--instance-soft);
+      }
+
+      .contract-card.annotation-contract {
+        --contract-accent: var(--annotation);
+        --contract-soft: var(--annotation-soft);
+      }
+
+      .contract-card.tool-contract {
+        --contract-accent: var(--agent);
+        --contract-soft: var(--agent-soft);
+      }
+
+      .contract-header {
+        display: grid;
+        grid-template-columns: 42px minmax(0, 1fr);
+        gap: 13px;
+        padding-right: 30px;
+      }
+
+      .contract-index {
+        display: grid;
+        width: 42px;
+        height: 42px;
+        place-items: center;
+        border: 1px solid color-mix(in srgb, var(--contract-accent) 30%, var(--line));
+        border-radius: 12px;
+        background: var(--contract-soft);
+        color: var(--contract-accent);
+        font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+        font-size: 10px;
+        font-weight: 900;
+      }
+
+      .contract-header small,
+      .contract-columns,
+      .contract-party,
+      .contract-call code,
+      .contract-outcome b,
+      .decision-chip b {
+        font-family: ui-monospace, 'SFMono-Regular', Menlo, Monaco, Consolas, monospace;
+      }
+
+      .contract-header small {
+        display: block;
+        margin: 0 0 5px;
+        color: var(--contract-accent);
+        font-size: 9px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .contract-header h3 {
+        margin: 0;
+        font-size: 20px;
+        letter-spacing: -0.025em;
+        line-height: 1.2;
+      }
+
+      .contract-interface {
+        margin: 16px 0 0;
+        padding: 9px 11px;
+        border: 1px solid color-mix(in srgb, var(--contract-accent) 25%, var(--line));
+        border-radius: 9px;
+        background: var(--contract-soft);
+        color: var(--contract-accent);
+        font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+        font-size: 9px;
+        line-height: 1.5;
+      }
+
+      .contract-invariant {
+        margin: 12px 0 20px;
+        padding-left: 11px;
+        border-left: 3px solid var(--contract-accent);
+        color: var(--ink-soft);
+        font-size: 11px;
+        line-height: 1.65;
+      }
+
+      .contract-columns,
+      .contract-message {
+        display: grid;
+        grid-template-columns: 88px minmax(0, 1fr) 106px;
+        gap: 10px;
+      }
+
+      .contract-columns {
+        margin-bottom: 7px;
+        padding: 0 6px;
+        color: var(--ink-faint);
+        font-size: 8px;
+        letter-spacing: 0.07em;
+        text-align: center;
+        text-transform: uppercase;
+      }
+
+      .contract-sequence {
+        display: grid;
+        gap: 7px;
+      }
+
+      .contract-message {
+        min-height: 62px;
+        align-items: stretch;
+        padding: 7px;
+        border: 1px solid var(--line);
+        border-radius: 11px;
+        background: var(--paper);
+      }
+
+      .contract-party {
+        display: grid;
+        min-width: 0;
+        place-items: center;
+        padding: 6px;
+        border-radius: 8px;
+        background: var(--paper-soft);
+        color: var(--ink-soft);
+        font-size: 8px;
+        font-weight: 800;
+        line-height: 1.35;
+        text-align: center;
+        overflow-wrap: anywhere;
+      }
+
+      .contract-party.authority {
+        background: var(--contract-soft);
+        color: var(--contract-accent);
+      }
+
+      .contract-call {
+        position: relative;
+        display: grid;
+        min-width: 0;
+        align-content: center;
+        justify-items: center;
+        gap: 4px;
+        text-align: center;
+      }
+
+      .contract-call::before {
+        position: absolute;
+        z-index: 0;
+        top: 19px;
+        right: 2px;
+        left: 2px;
+        height: 1px;
+        background: color-mix(in srgb, var(--contract-accent) 42%, var(--line));
+        content: '';
+      }
+
+      .contract-call::after {
+        position: absolute;
+        z-index: 0;
+        top: 16px;
+        right: 0;
+        width: 6px;
+        height: 6px;
+        border-top: 1px solid var(--contract-accent);
+        border-right: 1px solid var(--contract-accent);
+        content: '';
+        transform: rotate(45deg);
+      }
+
+      .contract-message.reverse .contract-call::after {
+        right: auto;
+        left: 0;
+        transform: rotate(-135deg);
+      }
+
+      .contract-call code,
+      .contract-call span {
+        position: relative;
+        z-index: 1;
+        max-width: 100%;
+        padding: 2px 6px;
+        background: var(--paper);
+      }
+
+      .contract-call code {
+        color: var(--ink);
+        font-size: 8px;
+        font-weight: 800;
+        line-height: 1.4;
+        overflow-wrap: anywhere;
+      }
+
+      .contract-call span {
+        color: var(--ink-faint);
+        font-size: 8px;
+        line-height: 1.35;
+      }
+
+      .contract-decisions {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 7px;
+        margin-top: 9px;
+      }
+
+      .decision-chip {
+        min-width: 0;
+        padding: 9px;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        background: var(--paper);
+      }
+
+      .decision-chip b {
+        display: block;
+        margin-bottom: 4px;
+        color: var(--contract-accent);
+        font-size: 8px;
+        overflow-wrap: anywhere;
+      }
+
+      .decision-chip span {
+        display: block;
+        color: var(--ink-soft);
+        font-size: 8px;
+        line-height: 1.45;
+      }
+
+      .contract-outcomes {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        margin-top: 14px;
+      }
+
+      .contract-outcome {
+        padding: 10px 11px;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        background: var(--paper-soft);
+      }
+
+      .contract-outcome b {
+        display: block;
+        margin-bottom: 4px;
+        color: var(--contract-accent);
+        font-size: 8px;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+      }
+
+      .contract-outcome.failure b {
+        color: var(--archived);
+      }
+
+      .contract-outcome span {
+        display: block;
+        color: var(--ink-soft);
+        font-size: 9px;
+        line-height: 1.5;
+      }
+
+      .storage-layout {
+        display: grid;
+        grid-template-columns: minmax(370px, 0.78fr) minmax(0, 1.22fr);
+      }
+
+      .tree {
+        min-height: 100%;
+        margin: 0;
+        padding: 34px 36px;
+        border-right: 1px solid var(--line);
+        background: #14223a;
+        color: #d8e1ef;
+        font-size: 12px;
+        line-height: 1.9;
+        white-space: pre-wrap;
+      }
+
+      .tree .folder {
+        color: #91d6ca;
+      }
+
+      .tree .file {
+        color: #f0c873;
+      }
+
+      .storage-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .storage-card {
+        min-height: 190px;
+        padding: 25px 48px 24px 24px;
+        border-width: 0 1px 1px 0;
+        border-radius: 0;
+      }
+
+      .storage-card:nth-child(2n) {
+        border-right: 0;
+      }
+
+      .storage-card:nth-last-child(-n + 2) {
+        border-bottom: 0;
+      }
+
+      .scope-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .scope-card {
+        min-height: 300px;
+        padding: 30px 48px 30px 30px;
+        border-width: 0 1px 0 0;
+        border-radius: 0;
+      }
+
+      .scope-card:last-child {
+        border-right: 0;
+      }
+
+      .scope-card.core {
+        background: var(--instance-soft);
+      }
+
+      .scope-card.deferred {
+        background: var(--paper-soft);
+      }
+
+      .scope-list {
+        display: grid;
+        gap: 10px;
+        margin: 22px 0 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .scope-list li {
+        padding: 10px 12px;
+        border: 1px solid rgb(89 108 144 / 16%);
+        border-radius: 9px;
+        background: rgb(255 255 255 / 64%);
+        color: var(--ink-soft);
+        font-size: 11px;
+        line-height: 1.55;
+      }
+
+      .page-footer {
+        display: flex;
+        justify-content: space-between;
+        gap: 18px;
+        padding: 28px 8px 0;
+        color: var(--ink-faint);
+        font-size: 11px;
+      }
+
+      .page-footer a {
+        color: var(--agent);
+        text-decoration: none;
+      }
+
+      @media (max-width: 980px) {
+        .topnav {
+          display: none;
+        }
+
+        .hero,
+        .section-heading {
+          grid-template-columns: 1fr;
+        }
+
+        .definition-grid,
+        .interfaces-grid,
+        .data-entry-grid,
+        .contract-grid {
+          grid-template-columns: 1fr 1fr;
+        }
+
+        .contract-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .contract-card,
+        .contract-card:nth-child(2n),
+        .contract-card:nth-last-child(-n + 2) {
+          border-right: 0;
+          border-bottom: 1px solid var(--line);
+        }
+
+        .contract-card:last-child {
+          border-bottom: 0;
+        }
+
+        .data-authority-note {
+          grid-column: 1 / -1;
+        }
+
+        .definition-card:nth-child(2),
+        .interface-card:nth-child(2) {
+          border-right: 0;
+        }
+
+        .definition-card:nth-child(-n + 2),
+        .interface-card:nth-child(-n + 2) {
+          border-bottom: 1px solid var(--line);
+        }
+
+        .lifecycle-track {
+          grid-template-columns: 1fr;
+          gap: 12px;
+        }
+
+        .transition {
+          min-height: 74px;
+        }
+
+        .transition div {
+          grid-template-columns: 1fr 1fr;
+        }
+
+        .storage-layout {
+          grid-template-columns: 1fr;
+        }
+
+        .tree {
+          border-right: 0;
+          border-bottom: 1px solid var(--line);
+        }
+      }
+
+      @media (max-width: 700px) {
+        .page-shell {
+          width: min(100% - 20px, 1440px);
+          margin-top: 10px;
+        }
+
+        .topbar {
+          top: 6px;
+        }
+
+        .page-state {
+          display: none;
+        }
+
+        .hero {
+          gap: 30px;
+          padding: 62px 10px 38px;
+        }
+
+        h1 {
+          font-size: clamp(40px, 13vw, 62px);
+        }
+
+        .section-heading {
+          padding: 28px 22px 24px;
+        }
+
+        .flow-toolbar {
+          padding: 12px 20px;
+        }
+
+        .flow-toolbar .tip-help {
+          width: 100%;
+          margin: 4px 0 0;
+        }
+
+        .architecture-wrap {
+          padding: 18px 16px 0;
+        }
+
+        .flow-note {
+          grid-template-columns: 1fr;
+          margin: 16px;
+        }
+
+        .definition-grid,
+        .interfaces-grid,
+        .data-entry-grid,
+        .storage-grid,
+        .scope-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .data-authority-note {
+          grid-column: auto;
+        }
+
+        .data-entry-card.binding-entry {
+          grid-column: auto;
+        }
+
+        .definition-card,
+        .interface-card,
+        .storage-card,
+        .scope-card {
+          border-right: 0;
+          border-bottom: 1px solid var(--line);
+        }
+
+        .definition-card:last-child,
+        .interface-card:last-child,
+        .storage-card:last-child,
+        .scope-card:last-child {
+          border-bottom: 0;
+        }
+
+        .contract-card {
+          padding: 26px 20px 28px;
+        }
+
+        .contract-columns,
+        .contract-message {
+          grid-template-columns: 62px minmax(0, 1fr) 74px;
+          gap: 6px;
+        }
+
+        .contract-message {
+          padding: 6px;
+        }
+
+        .contract-party,
+        .contract-call code,
+        .contract-call span {
+          font-size: 7px;
+        }
+
+        .contract-decisions,
+        .contract-outcomes {
+          grid-template-columns: 1fr;
+        }
+
+        .lifecycle-body {
+          padding: 24px 20px 30px;
+        }
+
+        .page-footer {
+          flex-direction: column;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        html {
+          scroll-behavior: auto;
+        }
+
+        *,
+        *::before,
+        *::after {
+          scroll-behavior: auto !important;
+          transition-duration: 0.01ms !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="topbar">
+        <a class="brand" href="product.html">
+          <span class="brand-mark">OA</span>
+          <span class="brand-copy">
+            <strong>Open Artifacts</strong>
+            <span>Artifact Instance Architecture</span>
+          </span>
+        </a>
+        <nav class="topnav" aria-label="页面导航">
+          <a href="product.html">产品</a>
+          <a href="#blueprint" aria-current="page">架构</a>
+          <a href="#language">术语</a>
+          <a href="#lifecycle">生命周期</a>
+          <a href="#interfaces">接口</a>
+          <a href="#contracts">契约</a>
+          <a href="#storage">存储</a>
+          <a href="#scope">范围</a>
+        </nav>
+        <span class="page-state">Architecture draft · 2026.07.30</span>
+      </header>
+
+      <main>
+        <section class="hero" aria-labelledby="hero-title">
+          <div>
+            <p class="eyebrow">Instance runtime · minimum architecture</p>
+            <h1 id="hero-title">Package 创建 Instance，Instance 独立持久</h1>
+            <p class="hero-summary">
+              OA Daemon 管理 Artifact Instance 的身份、Package Binding 和三态生命周期，并围绕每个
+              Instance 提供 Data、Annotation 与 Tool。Artifact Runtime 可以停止或换用新的 Package，
+              Instance ID、工作内容和标注不会因此消失。
+            </p>
+          </div>
+          <div class="invariant-list" aria-label="三个架构不变量">
+            <article class="invariant">
+              <b>01</b>
+              <span
+                ><strong>一个持久化身份</strong>Package 是定义；Instance
+                才是用户正在工作的对象。</span
+              >
+            </article>
+            <article class="invariant">
+              <b>02</b>
+              <span
+                ><strong>三项核心能力</strong>Data 保存内容，Annotation 保存上下文，Tool
+                执行领域操作。</span
+              >
+            </article>
+            <article class="invariant">
+              <b>03</b>
+              <span
+                ><strong>三个生命周期状态</strong>只有
+                Active、Stopped、Archived；其余都是操作。</span
+              >
+            </article>
+          </div>
+        </section>
+
+        <section class="section" id="blueprint" aria-labelledby="blueprint-title">
+          <header class="section-heading">
+            <div>
+              <p class="section-kicker">One durable object</p>
+              <h2 id="blueprint-title">人和 Agent 通过不同入口，共同作用于一个 Instance</h2>
+            </div>
+            <p>
+              Human 通过 Artifact UI 与 Annotation UI 协作；Package Runtime 使用自动绑定当前
+              Instance 的 OA SDK，外部 Agent 使用显式 instanceId 的 OA CLI / Remote MCP Adapter。
+              两条路径最终进入同一个 OA Daemon。
+            </p>
+          </header>
+
+          <div class="flow-toolbar" role="toolbar" aria-label="突出架构链路">
+            <span>突出链路</span>
+            <button class="flow-button" type="button" data-flow-button="all" aria-pressed="true">
+              全部
+            </button>
+            <button class="flow-button" type="button" data-flow-button="human" aria-pressed="false">
+              Human
+            </button>
+            <button class="flow-button" type="button" data-flow-button="agent" aria-pressed="false">
+              Agent
+            </button>
+            <button
+              class="flow-button"
+              type="button"
+              data-flow-button="annotation"
+              aria-pressed="false"
+            >
+              Annotation
+            </button>
+            <button class="flow-button" type="button" data-flow-button="tool" aria-pressed="false">
+              Tool
+            </button>
+            <button
+              class="flow-button"
+              type="button"
+              data-flow-button="lifecycle"
+              aria-pressed="false"
+            >
+              Lifecycle
+            </button>
+            <span class="tip-help">悬停、点击或键盘聚焦任一方框，查看 ChatCut 示例</span>
+          </div>
+
+          <div class="architecture-wrap">
+            <div
+              class="architecture-map"
+              aria-label="Artifact Package、Artifact Instance、Human、Agent、Data、Annotation、Tool 与持久化关系"
+            >
+              <div class="lane-grid">
+                <article
+                  class="architecture-node human-node tip-host flow-target"
+                  data-tip-key="human"
+                  data-flow="human annotation"
+                >
+                  <span class="node-label">Human actor</span>
+                  <strong>Human</strong>
+                  <p>查看 Artifact UI、编辑内容、选择目标、提交 Annotation 并验收结果。</p>
+                </article>
+                <article
+                  class="architecture-node agent-node tip-host flow-target"
+                  data-tip-key="agent"
+                  data-flow="agent annotation tool"
+                >
+                  <span class="node-label">External actor</span>
+                  <strong>Agent</strong>
+                  <p>读取 Data 与 Annotation，发现并调用绑定到当前 Instance 的 Artifact Tools。</p>
+                </article>
+              </div>
+
+              <div class="connector-row" aria-hidden="true">
+                <div class="connector"><span>UI 操作 · Annotation</span></div>
+                <div class="connector"><span>Agent Data · Annotation · Tool API</span></div>
+              </div>
+
+              <div class="access-grid">
+                <article
+                  class="architecture-node workbench-node tip-host flow-target"
+                  data-tip-key="workbench"
+                  data-flow="human annotation"
+                >
+                  <span class="node-label">Human access</span>
+                  <strong>Workbench + Artifact UI</strong>
+                  <p>
+                    Workbench 承载 Package UI、默认 DOM Inspector 和 Annotation UI；UI 获得当前
+                    Instance 的 OA SDK Context。
+                  </p>
+                </article>
+                <article
+                  class="architecture-node agent-interface-node tip-host flow-target"
+                  data-tip-key="agent-interface"
+                  data-flow="agent annotation tool"
+                >
+                  <span class="node-label">Agent access</span>
+                  <strong>External Agent Interface</strong>
+                  <p>
+                    OA CLI / Remote MCP 只做 Adapter；所有请求显式携带 instanceId 并进入 Daemon。
+                  </p>
+                </article>
+              </div>
+
+              <div class="instance-arrow" aria-hidden="true">
+                <span>Runtime SDK 隐式绑定 · External Agent 显式传 instanceId</span>
+              </div>
+
+              <section
+                class="instance-shell tip-host flow-target"
+                data-tip-key="artifact-instance"
+                data-flow="human agent annotation tool lifecycle"
+              >
+                <header class="instance-title">
+                  <span class="node-label">OA Daemon authority · durable working object</span>
+                  <strong>Artifact Instance</strong>
+                </header>
+                <span class="instance-identity">instance_chatcut_42</span>
+
+                <div class="instance-content">
+                  <article
+                    class="architecture-node manager-card tip-host flow-target"
+                    data-tip-key="instance-manager"
+                    data-flow="human agent lifecycle"
+                  >
+                    <span class="node-label">Identity + lifecycle</span>
+                    <strong>Instance Manager</strong>
+                    <p>
+                      管理身份、Package Binding 和三态生命周期；replacePackage 保留同一个 Instance。
+                    </p>
+                    <div class="state-stack" aria-label="Instance 状态">
+                      <span class="state-chip active"
+                        ><b>Active</b><small>Runtime 运行</small></span
+                      >
+                      <span class="state-chip"><b>Stopped</b><small>数据保留</small></span>
+                      <span class="state-chip archived"
+                        ><b>Archived</b><small>等待恢复</small></span
+                      >
+                    </div>
+                  </article>
+
+                  <div class="capability-grid">
+                    <article
+                      class="capability-card data-card tip-host flow-target"
+                      data-tip-key="data-capability"
+                      data-flow="human agent tool"
+                    >
+                      <span class="node-label">Persistent work</span>
+                      <strong>Data</strong>
+                      <p>Instance 的权威工作内容；Daemon 保证幂等提交，并以 Git 记录 revision。</p>
+                      <ul>
+                        <li>Runtime SDK → current Instance</li>
+                        <li>Agent Interface → explicit instanceId</li>
+                        <li>Daemon → idempotency + Git revision</li>
+                      </ul>
+                    </article>
+
+                    <article
+                      class="capability-card annotation-card tip-host flow-target"
+                      data-tip-key="annotation-capability"
+                      data-flow="human agent annotation"
+                    >
+                      <span class="node-label">Human context</span>
+                      <strong>Annotation</strong>
+                      <p>独立于 Data 的沟通记录，保存人的表达、Target 和创建时上下文。</p>
+                      <ul>
+                        <li>Target Snapshot + resolveTarget</li>
+                        <li>create / reply / status receipt</li>
+                        <li>open → applied → resolved</li>
+                      </ul>
+                    </article>
+
+                    <article
+                      class="capability-card tool-card tip-host flow-target"
+                      data-tip-key="tool-capability"
+                      data-flow="agent tool"
+                    >
+                      <span class="node-label">Package operation</span>
+                      <strong>Tool</strong>
+                      <p>Package 声明的具名领域操作；OA 负责发现、绑定 Instance 和执行调用。</p>
+                      <ul>
+                        <li>Package 定义 Schema</li>
+                        <li>Agent 使用 list / call + instanceId</li>
+                        <li>Active Runtime Handler 使用 SDK</li>
+                      </ul>
+                    </article>
+                  </div>
+                </div>
+
+                <div class="instance-rule" aria-label="Instance 能力访问规则">
+                  <strong>Daemon authority</strong>
+                  <span>Runtime SDK → implicit Instance</span>
+                  <span>Agent Adapter → explicit instanceId</span>
+                  <span>mutation → idempotency → Git revision</span>
+                </div>
+              </section>
+
+              <div class="source-grid">
+                <article
+                  class="architecture-node package-node tip-host flow-target"
+                  data-tip-key="artifact-package"
+                  data-flow="human agent annotation tool lifecycle"
+                >
+                  <span class="node-label">Reusable definition</span>
+                  <strong>Artifact Package</strong>
+                  <p>定义 UI、初始输入、Artifact Tools，以及可选的 Annotation Target 描述。</p>
+                  <div class="node-token-list">
+                    <span>Artifact Source</span>
+                    <span>Input Contract</span>
+                    <span>Artifact UI</span>
+                    <span>Tool Definitions</span>
+                  </div>
+                </article>
+
+                <article
+                  class="architecture-node storage-node tip-host flow-target"
+                  data-tip-key="instance-storage"
+                  data-flow="human agent annotation tool lifecycle"
+                >
+                  <span class="node-label">Movable durable records</span>
+                  <strong>Instance Bundle</strong>
+                  <p>
+                    默认由 OA Home 托管，也可迁移到用户工程；保存身份、Git-backed Data、Bindings 和
+                    Annotations。
+                  </p>
+                  <div class="node-token-list">
+                    <span>name.openartifact/</span>
+                    <span>instance.json</span>
+                    <span>data/.git/</span>
+                    <span>bindings.json</span>
+                    <span>annotations.sqlite</span>
+                  </div>
+                </article>
+              </div>
+            </div>
+          </div>
+
+          <div class="flow-note" aria-live="polite">
+            <small id="flow-label">全部关系</small>
+            <p id="flow-copy">
+              Package 提供定义；OA Daemon 保存 Instance 身份和三项能力；Runtime SDK 与 Agent Adapter
+              从不同入口进入同一个权威面。
+            </p>
+            <code class="flow-code" id="flow-code"
+              >package → daemon(instance) → data | annotation | tool</code
+            >
+          </div>
+        </section>
+
+        <section class="section" id="language" aria-labelledby="language-title">
+          <header class="section-heading">
+            <div>
+              <p class="section-kicker">Definition ≠ object ≠ process ≠ surface</p>
+              <h2 id="language-title">四个术语各自只回答一个问题</h2>
+            </div>
+            <p>
+              Package、Instance、Runtime 与 UI 不再互相代称。尤其是 Instance 是持久化对象， Runtime
+              只是它在 Active 状态下使用的短生命周期执行环境。
+            </p>
+          </header>
+          <div class="definition-grid">
+            <article
+              class="definition-card package-definition tip-host"
+              data-tip-key="artifact-package"
+            >
+              <small>What can be instantiated?</small>
+              <h3>Artifact Package</h3>
+              <p>可复用定义。一个 Package 可以创建多个拥有不同 Data 与 Annotation 的 Instance。</p>
+              <code>package + input → instance</code>
+            </article>
+            <article
+              class="definition-card instance-definition tip-host"
+              data-tip-key="artifact-instance"
+            >
+              <small>What is the user working on?</small>
+              <h3>Artifact Instance</h3>
+              <p>
+                持久化工作实体。它拥有稳定 ID，并跨生命周期与 Package Binding 替换保持同一身份。
+              </p>
+              <code>identity + binding + data + annotation</code>
+            </article>
+            <article
+              class="definition-card runtime-definition tip-host"
+              data-tip-key="artifact-runtime"
+            >
+              <small>What is running now?</small>
+              <h3>Artifact Runtime</h3>
+              <p>
+                只在 Active 时存在。停止或换用新的 Package Runtime，不会删除 Instance 及其持久数据。
+              </p>
+              <code>start / stop</code>
+            </article>
+            <article class="definition-card ui-definition tip-host" data-tip-key="artifact-ui">
+              <small>What does the human see?</small>
+              <h3>Artifact UI</h3>
+              <p>由 Package 定义、从 Instance Data 呈现出的交互界面，不承担持久化身份。</p>
+              <code>data → visible interface</code>
+            </article>
+          </div>
+        </section>
+
+        <section class="section" id="lifecycle" aria-labelledby="lifecycle-title">
+          <header class="section-heading">
+            <div>
+              <p class="section-kicker">Three states only</p>
+              <h2 id="lifecycle-title">生命周期只有 Active、Stopped、Archived</h2>
+            </div>
+            <p>
+              Create、Start、Stop、Archive 与 Restore 都是操作，不是状态。新建 Instance 默认进入
+              Stopped；Archived 必须先 Restore 为 Stopped，才能再次 Start。
+            </p>
+          </header>
+          <div class="lifecycle-body">
+            <div class="lifecycle-track">
+              <article class="state-card active tip-host" data-tip-key="active-instance">
+                <small>State</small>
+                <h3>Active</h3>
+                <p>
+                  Artifact Runtime 正在提供 UI 与 Package Tools；Data 和 Annotation 接口同时可用。
+                </p>
+                <span class="status-pill">runtime: running</span>
+              </article>
+
+              <div class="transition" aria-label="Active 与 Stopped 之间的操作">
+                <div>
+                  <span>stop →</span>
+                  <span>← start</span>
+                </div>
+              </div>
+
+              <article class="state-card stopped tip-host" data-tip-key="stopped-instance">
+                <small>State</small>
+                <h3>Stopped</h3>
+                <p>Runtime 不运行；Instance ID、Data、Bindings 与 Annotations 完整保留。</p>
+                <span class="status-pill">runtime: absent</span>
+              </article>
+
+              <div class="transition" aria-label="Stopped 与 Archived 之间的操作">
+                <div>
+                  <span>archive →</span>
+                  <span>← restore</span>
+                </div>
+              </div>
+
+              <article class="state-card archived tip-host" data-tip-key="archived-instance">
+                <small>State</small>
+                <h3>Archived</h3>
+                <p>Instance 已归档并保留恢复所需内容；恢复前不能启动 Runtime 或调用 Tool。</p>
+                <span class="status-pill">restorable: true</span>
+              </article>
+            </div>
+            <p class="lifecycle-rule">
+              Archive 只从 Stopped 进入。这样每次归档都面对一个已停止、边界稳定的 Instance；
+              删除归档不是第四个状态，而是另一个管理操作。replacePackage 也不是新状态： Daemon
+              停止旧 Runtime、替换 Package Binding，再用新 Package 启动同一个 Instance。
+            </p>
+          </div>
+        </section>
+
+        <section class="section" id="interfaces" aria-labelledby="interfaces-title">
+          <header class="section-heading">
+            <div>
+              <p class="section-kicker">Two API forms · Three capabilities</p>
+              <h2 id="interfaces-title">两种 API 形式，访问同三项 Instance 能力</h2>
+            </div>
+            <p>
+              OA SDK 只注入 Artifact Runtime，并隐式绑定当前 Instance；OA CLI 面向外部 Agent
+              与本地自动化，所有请求显式传 instanceId。Remote MCP 只是 External Agent Interface
+              的另一个 Adapter，不形成第三套语义。
+            </p>
+          </header>
+
+          <div class="data-entry-grid" aria-label="两种 OA API 形式">
+            <article class="data-entry-card tip-host" data-tip-key="oa-sdk">
+              <span class="node-label">Programmatic API</span>
+              <strong>OA SDK</strong>
+              <p>
+                Package UI 与 Tool Handler 使用。Runtime Context 自动限定当前 Instance，因此 Package
+                调用 Data 与 Annotation API 时不传 instanceId。
+              </p>
+            </article>
+            <article class="data-entry-card tip-host" data-tip-key="oa-cli">
+              <span class="node-label">Command-line API</span>
+              <strong>OA CLI</strong>
+              <p>
+                外部 Agent 使用参数、stdin/stdout、文件路径与退出码访问 Instance；每次调用显式传
+                instanceId。Remote MCP 映射同一个 External Agent Interface。
+              </p>
+            </article>
+            <article class="data-entry-card binding-entry tip-host" data-tip-key="sdk-data-binding">
+              <span class="node-label">Runtime synchronization contract</span>
+              <strong>SDK State / Data Binding</strong>
+              <p>
+                开箱即用地提供当前 snapshot、mutation 与 revision 变化后的重新获取 / 订阅，让
+                Artifact UI 收敛到权威 Data。具体采用 event stream、polling、signals、React context
+                或其他机制，此阶段不做工程选型。
+              </p>
+            </article>
+            <div class="data-authority-note">
+              Runtime SDK（implicit Instance）/ Agent Adapter（explicit instanceId）→ OA Daemon →
+              幂等校验 → Git revision → receipt + change event
+            </div>
+          </div>
+
+          <div class="interfaces-grid">
+            <article class="interface-card data-interface tip-host" data-tip-key="data-capability">
+              <small>Persistent content</small>
+              <h3>Data API</h3>
+              <p>
+                SDK 与 CLI 的参数纪律不同；Data 的 Contract 校验、幂等、Git revision、receipt 与
+                change event 都由 Daemon 保持唯一。
+              </p>
+              <ul class="method-list">
+                <li>SDK data.bind → binding.read / update <span>current Instance</span></li>
+                <li>CLI data read / write <span>explicit instanceId</span></li>
+              </ul>
+            </article>
+
+            <article
+              class="interface-card annotation-interface tip-host"
+              data-tip-key="annotation-capability"
+            >
+              <small>Human context</small>
+              <h3>Annotation API</h3>
+              <p>
+                保存人的表达、Target 与 Snapshot；每次 mutation 返回 annotationId、revision、
+                status，并产生 Annotation change event。
+              </p>
+              <ul class="method-list">
+                <li>annotation.list <span>读取线程</span></li>
+                <li>annotation.create <span>提交标注</span></li>
+                <li>annotation.reply <span>回复上下文</span></li>
+                <li>annotation.resolve <span>基于最新 revision</span></li>
+              </ul>
+            </article>
+
+            <article class="interface-card tool-interface tip-host" data-tip-key="tool-capability">
+              <small>Package operations</small>
+              <h3>Tool API</h3>
+              <p>列出当前 Package 的 Tool 定义，并把调用绑定到一个具体 Artifact Instance。</p>
+              <ul class="method-list">
+                <li>tool.list(instanceId) <span>发现能力与状态</span></li>
+                <li>tool.call(instanceId, …) <span>幂等调用 Handler</span></li>
+              </ul>
+            </article>
+          </div>
+        </section>
+
+        <section class="section" id="contracts" aria-labelledby="contracts-title">
+          <header class="section-heading">
+            <div>
+              <p class="section-kicker">Four runtime contracts</p>
+              <h2 id="contracts-title">四张契约图，约束最薄协作闭环</h2>
+            </div>
+            <p>
+              这些不是四个新模块，而是调用者可以依赖的 Interface。图中明确调用顺序、Daemon
+              必须隐藏的实现细节，以及成功与失败出口；完整类型定义见
+              <a class="contract-intro-link" href="architecture/oa-sdk-api-design.md"
+                >OA SDK API 设计</a
+              >。
+            </p>
+          </header>
+
+          <div class="contract-grid" aria-label="Open Artifacts 四项运行时契约">
+            <article
+              class="contract-card runtime-contract tip-host"
+              data-tip-key="runtime-contract"
+            >
+              <header class="contract-header">
+                <span class="contract-index">01</span>
+                <div>
+                  <small>Activation contract</small>
+                  <h3>Runtime 启动与 Package 注册</h3>
+                </div>
+              </header>
+              <p class="contract-interface">
+                activate({ oa, input }) · register() · render({ oa, input }) · dispose()
+              </p>
+              <p class="contract-invariant">
+                Tool 与 Target Provider 必须在 Render 前完成注册；React 生命周期不能决定 Registry
+                是否存在。
+              </p>
+
+              <div class="contract-columns" aria-hidden="true">
+                <span>Caller</span>
+                <span>Interface message</span>
+                <span>Receiver</span>
+              </div>
+              <div class="contract-sequence">
+                <div class="contract-message">
+                  <span class="contract-party">Daemon</span>
+                  <div class="contract-call">
+                    <code>validate input + create scoped oa</code>
+                    <span>固定当前 Instance Context</span>
+                  </div>
+                  <span class="contract-party authority">Runtime</span>
+                </div>
+                <div class="contract-message">
+                  <span class="contract-party">Runtime</span>
+                  <div class="contract-call">
+                    <code>activate({ oa, input })</code>
+                    <span>仅调用一次</span>
+                  </div>
+                  <span class="contract-party authority">Package</span>
+                </div>
+                <div class="contract-message">
+                  <span class="contract-party">Package</span>
+                  <div class="contract-call">
+                    <code>data.bind · tool.register · annotation.registerTargetProvider</code>
+                    <span>形成当前 Runtime Registry</span>
+                  </div>
+                  <span class="contract-party authority">OA SDK</span>
+                </div>
+                <div class="contract-message">
+                  <span class="contract-party">Runtime</span>
+                  <div class="contract-call">
+                    <code>publish Tool + Target Registry</code>
+                    <span>只提交完成注册的能力</span>
+                  </div>
+                  <span class="contract-party authority">Daemon</span>
+                </div>
+                <div class="contract-message">
+                  <span class="contract-party">Runtime</span>
+                  <div class="contract-call">
+                    <code>render({ oa, input })</code>
+                    <span>Human 开始使用 Artifact UI</span>
+                  </div>
+                  <span class="contract-party authority">Artifact UI</span>
+                </div>
+                <div class="contract-message">
+                  <span class="contract-party">Runtime</span>
+                  <div class="contract-call">
+                    <code>dispose()</code>
+                    <span>Stop、热重载或 Package 替换</span>
+                  </div>
+                  <span class="contract-party authority">Package</span>
+                </div>
+              </div>
+
+              <div class="contract-outcomes">
+                <div class="contract-outcome">
+                  <b>Success</b>
+                  <span>Instance 进入 Active；UI、Tool Registry 与 Target Provider 同时可用。</span>
+                </div>
+                <div class="contract-outcome failure">
+                  <b>Failure</b>
+                  <span>不发布半初始化 Runtime；Instance Data 与 Annotation 保持不变。</span>
+                </div>
+              </div>
+            </article>
+
+            <article class="contract-card data-contract tip-host" data-tip-key="data-contract">
+              <header class="contract-header">
+                <span class="contract-index">02</span>
+                <div>
+                  <small>Data convergence contract</small>
+                  <h3>Data 提交与 UI 收敛</h3>
+                </div>
+              </header>
+              <p class="contract-interface">
+                oa.data.bind(path) → binding.read() · update(change) · subscribe()
+              </p>
+              <p class="contract-invariant">
+                Package 不传 instanceId、baseRevision、actor 或幂等键；scoped SDK 自动补齐，Daemon
+                仍是唯一 Data Authority。
+              </p>
+
+              <div class="contract-columns" aria-hidden="true">
+                <span>Caller</span>
+                <span>Interface message</span>
+                <span>Authority</span>
+              </div>
+              <div class="contract-sequence">
+                <div class="contract-message">
+                  <span class="contract-party">UI / Handler</span>
+                  <div class="contract-call">
+                    <code>binding.update(change)</code>
+                    <span>只表达领域变化</span>
+                  </div>
+                  <span class="contract-party authority">OA SDK</span>
+                </div>
+                <div class="contract-message">
+                  <span class="contract-party">OA SDK</span>
+                  <div class="contract-call">
+                    <code>mutation + inferred context</code>
+                    <span>instance · revision · actor · idempotency</span>
+                  </div>
+                  <span class="contract-party authority">Daemon</span>
+                </div>
+                <div class="contract-message">
+                  <span class="contract-party">Daemon</span>
+                  <div class="contract-call">
+                    <code>lifecycle · schema · conflict · idem</code>
+                    <span>全部通过才允许提交</span>
+                  </div>
+                  <span class="contract-party authority">Data</span>
+                </div>
+                <div class="contract-message">
+                  <span class="contract-party">Data</span>
+                  <div class="contract-call">
+                    <code>Git commit → opaque revision</code>
+                    <span>原子保存权威工作内容</span>
+                  </div>
+                  <span class="contract-party authority">Storage</span>
+                </div>
+                <div class="contract-message reverse">
+                  <span class="contract-party">OA SDK</span>
+                  <div class="contract-call">
+                    <code>receipt + change event ← commit</code>
+                    <span>更新 Binding 的 committed 状态</span>
+                  </div>
+                  <span class="contract-party authority">Daemon</span>
+                </div>
+                <div class="contract-message">
+                  <span class="contract-party">OA SDK</span>
+                  <div class="contract-call">
+                    <code>publish new snapshot</code>
+                    <span>订阅者收敛到 committed Data</span>
+                  </div>
+                  <span class="contract-party authority">Artifact UI</span>
+                </div>
+              </div>
+
+              <div class="contract-outcomes">
+                <div class="contract-outcome">
+                  <b>Success</b>
+                  <span>返回 revision 与 receipt；所有 Binding 看到同一 committed snapshot。</span>
+                </div>
+                <div class="contract-outcome failure">
+                  <b>Failure</b>
+                  <span>冲突不静默覆盖并保留 Draft；Stopped / Archived 直接拒绝写入。</span>
+                </div>
+              </div>
+            </article>
+
+            <article
+              class="contract-card annotation-contract tip-host"
+              data-tip-key="annotation-contract"
+            >
+              <header class="contract-header">
+                <span class="contract-index">03</span>
+                <div>
+                  <small>Context contract</small>
+                  <h3>Annotation 捕获、定位与决策</h3>
+                </div>
+              </header>
+              <p class="contract-interface">
+                describe(selection) · annotation.create(snapshot) · target.resolve(selector) ·
+                humanDecision
+              </p>
+              <p class="contract-invariant">
+                Selection 是短生命周期抽象；Snapshot 是历史证据；执行前必须在当前 Data 上重新
+                resolve。Annotation 本身不会调用 Tool。
+              </p>
+
+              <div class="contract-columns" aria-hidden="true">
+                <span>Caller</span>
+                <span>Interface message</span>
+                <span>Receiver</span>
+              </div>
+              <div class="contract-sequence">
+                <div class="contract-message">
+                  <span class="contract-party">Human</span>
+                  <div class="contract-call">
+                    <code>selection · context-menu · hover</code>
+                    <span>表达“我指的是这里”</span>
+                  </div>
+                  <span class="contract-party authority">Artifact UI</span>
+                </div>
+                <div class="contract-message">
+                  <span class="contract-party">Artifact UI</span>
+                  <div class="contract-call">
+                    <code>describe(selection, trigger)</code>
+                    <span>Package Provider；否则 DOM Inspector</span>
+                  </div>
+                  <span class="contract-party authority">Target Provider</span>
+                </div>
+                <div class="contract-message">
+                  <span class="contract-party">Target Provider</span>
+                  <div class="contract-call">
+                    <code>Target Descriptor + presentation</code>
+                    <span>Human 与 Agent 使用同源上下文</span>
+                  </div>
+                  <span class="contract-party authority">Workbench</span>
+                </div>
+                <div class="contract-message">
+                  <span class="contract-party">Workbench</span>
+                  <div class="contract-call">
+                    <code>capture Target Snapshot + body</code>
+                    <span>返回 annotationId · revision · open</span>
+                  </div>
+                  <span class="contract-party authority">Store</span>
+                </div>
+                <div class="contract-message">
+                  <span class="contract-party">Agent</span>
+                  <div class="contract-call">
+                    <code>annotation.get + target.resolve</code>
+                    <span>使用当前 Data，不信任旧 Snapshot</span>
+                  </div>
+                  <span class="contract-party authority">Daemon</span>
+                </div>
+                <div class="contract-message">
+                  <span class="contract-party">Daemon</span>
+                  <div class="contract-call">
+                    <code>resolve(selector, current Data)</code>
+                    <span>不使用 capture-time Snapshot 代替定位</span>
+                  </div>
+                  <span class="contract-party authority">Provider</span>
+                </div>
+                <div class="contract-message reverse">
+                  <span class="contract-party">Agent</span>
+                  <div class="contract-call">
+                    <code>Target Resolution ← Daemon</code>
+                    <span>resolved 继续；其他状态均阻断</span>
+                  </div>
+                  <span class="contract-party authority">Daemon</span>
+                </div>
+              </div>
+
+              <div class="contract-decisions" aria-label="Human Decision 分支">
+                <div class="decision-chip">
+                  <b>approved</b>
+                  <span>允许 Agent 在重新定位后调用 Tool。</span>
+                </div>
+                <div class="decision-chip">
+                  <b>rejected</b>
+                  <span>Annotation 进入 rejected；Data 不变。</span>
+                </div>
+                <div class="decision-chip">
+                  <b>needs-revision</b>
+                  <span>保持 open；Agent 修改提案后再次确认。</span>
+                </div>
+              </div>
+
+              <div class="contract-outcomes">
+                <div class="contract-outcome">
+                  <b>Success</b>
+                  <span>Tool 成功后先 applied；验证或 Human 验收后才 resolved。</span>
+                </div>
+                <div class="contract-outcome failure">
+                  <b>Failure</b>
+                  <span>定位不唯一或执行失败时保持 open，并要求 Human 重新选择或补充信息。</span>
+                </div>
+              </div>
+            </article>
+
+            <article class="contract-card tool-contract tip-host" data-tip-key="tool-contract">
+              <header class="contract-header">
+                <span class="contract-index">04</span>
+                <div>
+                  <small>Capability contract</small>
+                  <h3>Tool 发现、调用与结果返回</h3>
+                </div>
+              </header>
+              <p class="contract-interface">
+                tool.list(instanceId) · tool.call({ instanceId, input, baseRevision, idempotencyKey
+                })
+              </p>
+              <p class="contract-invariant">
+                Agent 使用 External Agent Interface；Handler 使用 scoped SDK。OA 负责检查、路由与
+                result envelope，Package 只负责领域操作。
+              </p>
+
+              <div class="contract-columns" aria-hidden="true">
+                <span>Caller</span>
+                <span>Interface message</span>
+                <span>Receiver</span>
+              </div>
+              <div class="contract-sequence">
+                <div class="contract-message">
+                  <span class="contract-party">Agent</span>
+                  <div class="contract-call">
+                    <code>tool.list(instanceId)</code>
+                    <span>先发现当前 Package 能力</span>
+                  </div>
+                  <span class="contract-party authority">Agent Interface</span>
+                </div>
+                <div class="contract-message">
+                  <span class="contract-party">Agent Interface</span>
+                  <div class="contract-call">
+                    <code>resolve Instance + Active Registry</code>
+                    <span>CLI / Remote MCP 只做协议映射</span>
+                  </div>
+                  <span class="contract-party authority">Daemon</span>
+                </div>
+                <div class="contract-message reverse">
+                  <span class="contract-party">Agent</span>
+                  <div class="contract-call">
+                    <code>schemas + effects ← Active Registry</code>
+                    <span>Stopped / Archived 不可调用</span>
+                  </div>
+                  <span class="contract-party authority">Agent Interface</span>
+                </div>
+                <div class="contract-message">
+                  <span class="contract-party">Agent</span>
+                  <div class="contract-call">
+                    <code>tool.call(envelope)</code>
+                    <span>instance · input · revision · idempotency</span>
+                  </div>
+                  <span class="contract-party authority">Agent Interface</span>
+                </div>
+                <div class="contract-message">
+                  <span class="contract-party">Agent Interface</span>
+                  <div class="contract-call">
+                    <code>forward protocol-neutral call</code>
+                    <span>同一 request context</span>
+                  </div>
+                  <span class="contract-party authority">Daemon</span>
+                </div>
+                <div class="contract-message">
+                  <span class="contract-party">Daemon</span>
+                  <div class="contract-call">
+                    <code>policy · idem · input schema → handler</code>
+                    <span>approval 是执行前置条件</span>
+                  </div>
+                  <span class="contract-party authority">Package</span>
+                </div>
+                <div class="contract-message">
+                  <span class="contract-party">Handler</span>
+                  <div class="contract-call">
+                    <code>binding.read() / update(change)</code>
+                    <span>复用 Data 提交契约</span>
+                  </div>
+                  <span class="contract-party authority">OA SDK</span>
+                </div>
+                <div class="contract-message reverse">
+                  <span class="contract-party">Agent</span>
+                  <div class="contract-call">
+                    <code>{ callId, revision?, output } ← protocol mapping</code>
+                    <span>Daemon 校验 output；只读 Tool 可以没有 revision</span>
+                  </div>
+                  <span class="contract-party authority">Agent Interface</span>
+                </div>
+              </div>
+
+              <div class="contract-outcomes">
+                <div class="contract-outcome">
+                  <b>Success</b>
+                  <span>输出通过 Schema 校验；Data mutation 产生的 revision 同步回 UI。</span>
+                </div>
+                <div class="contract-outcome failure">
+                  <b>Typed errors</b>
+                  <span
+                    >INSTANCE_STOPPED · INSTANCE_ARCHIVED · TOOL_NOT_FOUND · TOOL_INPUT_INVALID ·
+                    TOOL_PERMISSION_DENIED · TOOL_CONFIRMATION_REQUIRED · TOOL_HANDLER_FAILED</span
+                  >
+                </div>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="section" id="storage" aria-labelledby="storage-title">
+          <header class="section-heading">
+            <div>
+              <p class="section-kicker">Concrete local-first storage</p>
+              <h2 id="storage-title">Instance Bundle 默认由 OA 托管，也可以迁入用户工程</h2>
+            </div>
+            <p>
+              OA 默认在自己的 Home 中创建并托管一个 <code>name.openartifact/</code>。迁移保持
+              Instance ID、Data revision、Annotations 与 Package Binding，不创建新
+              Instance；新位置成为唯一权威 Bundle，OA Home
+              只记录当前位置关联，不保留影子副本。Bundle 内只保存 Instance
+              真正拥有的内容；大型原始视频、用户现有 Markdown 或线上数据源可以继续留在外部，由 Data
+              Binding 保存关系和访问方式。参见
+              <a href="./adr/0001-movable-artifact-instance-bundles.md">ADR-0001</a>。
+            </p>
+          </header>
+
+          <div class="storage-layout">
+            <pre
+              class="tree"
+              aria-label="Artifact Instance 目录草案"
+            ><span class="folder">~/.open-artifacts/instances/</span>
+└── <span class="folder">访谈视频剪辑.openartifact/</span>
+    ├── <span class="file">instance.json</span>
+    ├── <span class="folder">data/</span>
+    │   ├── <span class="folder">.git/</span>
+    │   ├── project.json
+    │   ├── captions.vtt
+    │   └── thumbnails/
+    ├── <span class="file">bindings.json</span>
+    └── <span class="file">annotations.sqlite</span></pre>
+
+            <div class="storage-grid">
+              <article class="storage-card tip-host" data-tip-key="instance-manifest">
+                <small>Identity</small>
+                <h3>instance.json</h3>
+                <p>
+                  保存 Instance ID、当前状态、当前 Package Binding、current revision
+                  与替换来源记录。
+                </p>
+              </article>
+              <article class="storage-card tip-host" data-tip-key="managed-data">
+                <small>Managed data</small>
+                <h3>data/</h3>
+                <p>
+                  保存 OA 管理的持久工作文件；Daemon 用内置 Git repository 记录每次成功 mutation 的
+                  revision。
+                </p>
+              </article>
+              <article class="storage-card tip-host" data-tip-key="data-bindings">
+                <small>External resources</small>
+                <h3>bindings.json</h3>
+                <p>引用外部本地文件或线上数据源，不默认复制数 GB 的视频和既有用户文件。</p>
+              </article>
+              <article class="storage-card tip-host" data-tip-key="annotation-store">
+                <small>OA-owned records</small>
+                <h3>annotations.sqlite</h3>
+                <p>
+                  独立保存 Annotation、Target Snapshot、回复、状态与关联的 Data revision，不混入
+                  业务 Data。
+                </p>
+              </article>
+            </div>
+          </div>
+        </section>
+
+        <section class="section" id="scope" aria-labelledby="scope-title">
+          <header class="section-heading">
+            <div>
+              <p class="section-kicker">Minimum core</p>
+              <h2 id="scope-title">核心只实现一个 Daemon、一个管理器和三项能力</h2>
+            </div>
+            <p>
+              这次收敛不是删除必要行为，而是不把每项内部责任提前画成独立模块。出现真实变化需求后，
+              再从已有接口内部提取新的实现接缝。
+            </p>
+          </header>
+          <div class="scope-grid">
+            <article class="scope-card core tip-host" data-tip-key="minimum-core">
+              <small>Build now</small>
+              <h3>当前核心</h3>
+              <p>一个 OA Daemon，内部只有 Instance Manager 与 Data、Annotation、Tool 三项能力。</p>
+              <ul class="scope-list">
+                <li>
+                  <strong>Instance Manager：</strong>身份、三态生命周期与同一 Instance 的 Package
+                  replacement。
+                </li>
+                <li>
+                  <strong>Data：</strong>Data API、Managed Data、外部 Bindings、幂等与 Git
+                  revision。
+                </li>
+                <li>
+                  <strong>Annotation：</strong>Target resolution、Snapshot、receipt / event 与状态。
+                </li>
+                <li>
+                  <strong>Tool：</strong>Package 定义、list、call、Active 检查与 Handler 路由。
+                </li>
+                <li>
+                  <strong>Runtime SDK Context：</strong>自动绑定当前 Instance，并提供 State / Data
+                  Binding。
+                </li>
+              </ul>
+            </article>
+            <article class="scope-card deferred tip-host" data-tip-key="deferred-modules">
+              <small>Do not split yet</small>
+              <h3>不作为一级模块</h3>
+              <p>这些行为可以存在于核心实现内部，或者等到出现两个真实实现后再提取。</p>
+              <ul class="scope-list">
+                <li>Gateway / Policy Gate：先作为 OA Daemon 的入口检查。</li>
+                <li>
+                  Commit Coordinator：不拆成服务；幂等、原子写入与 receipt 是 Daemon 内部实现。
+                </li>
+                <li>
+                  State Observer：SDK Binding 是稳定接口，event stream / polling 等机制暂不决策。
+                </li>
+                <li>Task Manager / Audit Recorder：当前闭环不依赖，暂不进入核心。</li>
+                <li>Public State：不再作为独立概念，持久工作内容统一称为 Data。</li>
+                <li>
+                  Remote Source Access：云端 Agent 暂不能 fork / 编辑本地
+                  Package，等待统一文件系统抽象。
+                </li>
+              </ul>
+            </article>
+          </div>
+        </section>
+      </main>
+
+      <footer class="page-footer">
+        <a href="product.html">← 返回产品模型</a>
+        <span>Open Artifacts · Artifact Instance architecture · Working draft</span>
+      </footer>
+    </div>
+
+    <aside
+      class="architecture-tooltip"
+      id="architecture-tooltip"
+      role="tooltip"
+      aria-live="polite"
+      hidden
+    >
+      <small>这是什么</small>
+      <strong id="tooltip-title"></strong>
+      <p id="tooltip-copy"></p>
+      <div class="tooltip-example">
+        <small>ChatCut 示例</small>
+        <p id="tooltip-example"></p>
+      </div>
+    </aside>
+
+    <script>
+      const architectureTips = {
+        human: {
+          title: 'Human',
+          copy: '正在使用 Artifact UI 理解内容、表达意图并验收结果的人。',
+          example:
+            '剪辑师播放访谈视频，选中 12.3–18.7 秒并写下“删掉这里的停顿”，最后回看修改结果。',
+        },
+        agent: {
+          title: 'Agent',
+          copy: '通过 OA CLI / Remote MCP Adapter 显式选择 instanceId，读取 Data 与 Annotation，并调用当前 Package Tools 的外部智能体。',
+          example:
+            'Agent 读取时间范围 Annotation，调用 timeline.trim，再读取项目文件确认时间线已经变化。',
+        },
+        workbench: {
+          title: 'Workbench + Artifact UI',
+          copy: 'Workbench 是 OA 外壳；Artifact UI 由 Package 定义。两者共同构成人的操作入口。',
+          example:
+            'Workbench 承载 ChatCut 时间线，并提供默认 DOM Inspector 和评论输入框；视频编辑 UI 属于 Package。',
+        },
+        'agent-interface': {
+          title: 'External Agent Interface',
+          copy: 'Agent 通过 OA CLI 或 Remote MCP Adapter 访问 Daemon；每个请求显式携带 instanceId，外部 Agent 不获得 Runtime 注入的 OA SDK。',
+          example:
+            '本地 Agent 用 oa tool call --instance instance_chatcut_42 timeline.trim；云端 Adapter 映射同一请求，但暂不能直接编辑 OA 主机上的 Package 源码。',
+        },
+        'artifact-instance': {
+          title: 'Artifact Instance',
+          copy: '从 Package 创建出的持久工作实体，拥有稳定身份、Data、Annotations 与当前 Package Binding；替换 Binding 不创建新 Instance。',
+          example:
+            '“访谈视频剪辑”与“产品发布视频”是同一 ChatCut Package 创建出的两个独立 Instance。',
+        },
+        'instance-manager': {
+          title: 'Instance Manager',
+          copy: 'OA Daemon 中管理 Instance 身份、Package Binding、replacePackage 以及 Active、Stopped、Archived 三态生命周期的模块。',
+          example:
+            '它可以停止 instance_chatcut_42 的旧 Runtime，切换到 ChatCut Package 1.4.0，再以同一 instanceId 启动，但不理解时间线业务。',
+        },
+        'data-capability': {
+          title: 'Data',
+          copy: 'Instance 的持久工作内容。Runtime SDK 与 External Agent Adapter 的参数不同，但都进入 Daemon 的幂等校验与 Git 提交路径。',
+          example:
+            'ChatCut 的 project.json、字幕和缩略图在 data/；原始 MOV 可以通过 Binding 留在外部。',
+        },
+        'oa-sdk': {
+          title: 'OA SDK',
+          copy: '只注入 Artifact Runtime 的程序化 API。Package UI 与 Tool Handler 自动绑定当前 Instance，调用时不传 instanceId。',
+          example:
+            'ChatCut UI 与 timeline.trim Handler 都调用 binding.update(change)；Runtime Context 已经知道它们属于 instance_chatcut_42，SDK 自动附加 baseRevision 与幂等上下文。',
+        },
+        'oa-cli': {
+          title: 'OA CLI',
+          copy: '面向外部 Agent 与本地 Automation 的命令行 API；每次调用显式指定 instanceId，并把幂等键与 revision 传给 Daemon。',
+          example:
+            '用户运行 oa data read instance_chatcut_42 project.json，把结果输出到终端或交给后续脚本。',
+        },
+        'sdk-data-binding': {
+          title: 'SDK State / Data Binding',
+          copy: 'SDK 对 Artifact UI 承诺的同步接口：取得当前 snapshot、提交 mutation，并在权威 revision 改变后收敛到新 Data；不绑定具体前端框架或传输机制。',
+          example:
+            '远端 Agent trim 后，ChatCut UI 不整页刷新；Binding 收到或轮询到新 revision，重新投影时间线。事件流还是 polling 留到实现阶段决定。',
+        },
+        'runtime-contract': {
+          title: 'Runtime 启动契约',
+          copy: 'Runtime 先创建 instance-scoped OA SDK，再调用 Package activate 完成 Data、Tool 与 Target Provider 注册；Registry 发布后才渲染 UI。Stop 或热重载必须调用 disposer。',
+          example:
+            'ChatCut 启动时注册 project.json Binding、timeline.inspect / timeline.trim Tool 和 clip-range Target Provider；其中任何一步失败，都不会向 Agent 暴露半套能力。',
+        },
+        'data-contract': {
+          title: 'Data 收敛契约',
+          copy: 'Package 只通过 Binding 表达变化。SDK 自动附加 Instance、revision、actor 与幂等上下文；Daemon 校验并提交 Git revision，再驱动所有 UI 订阅者收敛。',
+          example:
+            '剪辑师拖动片段或 timeline.trim Handler 修改时间线时都调用 binding.update(change)；两个入口最终写入同一份 project.json，并让时间线显示同一个 revision。',
+        },
+        'annotation-contract': {
+          title: 'Annotation 上下文契约',
+          copy: 'Package 或 Inspector 把短生命周期 Selection 描述为可持久 Target。Snapshot 保存当时证据，Agent 执行前必须重新 resolve；Proposal 还需要 Human Decision。',
+          example:
+            '“删除 12.3–18.7 秒停顿”保存 clipId、时间范围和截图。若片段已经被拆分，resolve 返回 ambiguous，Agent 不能 trim；approved 才允许继续。',
+        },
+        'tool-contract': {
+          title: 'Tool 调用契约',
+          copy: 'Agent 先发现 Tool，再用显式 Instance envelope 调用；Daemon 统一处理生命周期、权限、幂等和 Schema，Handler 只实现领域操作并通过 scoped SDK 访问 Data。',
+          example:
+            'Agent 先 tools.list 找到 timeline.trim，再提交时间范围；Daemon 路由到 ChatCut Handler，成功返回 callId、project revision 和被删除的时长。',
+        },
+        'annotation-capability': {
+          title: 'Annotation',
+          copy: '独立于业务 Data 的沟通记录。Snapshot 保留历史证据；执行前重新 resolveTarget，Tool 成功先 applied，验证或验收后才 resolved。',
+          example:
+            '“删掉这里的停顿”保存 12.3–18.7 秒与截图；执行前再次解析 clipId。若目标已消失则保持 open，并要求剪辑师重选。',
+        },
+        'tool-capability': {
+          title: 'Tool',
+          copy: 'Package 声明的具名领域操作。OA 负责列出、绑定 Instance 和调用，但不定义业务含义。',
+          example:
+            'ChatCut Package 声明 seek、split、trim 与 export；Agent 调用 trim 比直接编辑视频二进制更可靠。',
+        },
+        'artifact-package': {
+          title: 'Artifact Package',
+          copy: '可复用、有版本且发布源码的定义，包含 Artifact UI、Input Contract 与 Artifact Tool 定义。',
+          example:
+            '同一个 ChatCut Package 可以创建多个 Instance；本地 Agent 发布新版后，原 Instance 可显式替换 Binding，而不复制工程和评论。',
+        },
+        'instance-storage': {
+          title: 'Instance Bundle',
+          copy: '一个 Instance 的可移动持久化目录包；默认由 OA Home 托管，也可迁入用户工程。迁移后 OA 只登记 Instance ID 与当前位置，不保留影子副本。',
+          example:
+            '“访谈视频剪辑.openartifact”从 OA Home 迁入视频工程后仍是同一个 Instance；停止 Runtime 或移动位置都不会改变其身份。',
+        },
+        'artifact-runtime': {
+          title: 'Artifact Runtime',
+          copy: '只在 Active 状态下存在的短生命周期执行环境，负责提供 Artifact UI 和运行 Package Tool。',
+          example: '关闭 ChatCut 的本地服务会停止 Runtime，但不会删除“访谈视频剪辑”这个 Instance。',
+        },
+        'artifact-ui': {
+          title: 'Artifact UI',
+          copy: 'Package 定义、从 Instance Data 呈现出来的可交互界面，不承担持久化身份。',
+          example: '视频预览、多轨时间线、素材库和播放头属于 ChatCut Artifact UI。',
+        },
+        'active-instance': {
+          title: 'Active Instance',
+          copy: 'Artifact Runtime 正在运行，Artifact UI 和 Package Tools 可用的 Instance 状态。',
+          example: '剪辑师正在浏览时间线，Agent 也可以在同一 Instance 上调用 trim。',
+        },
+        'stopped-instance': {
+          title: 'Stopped Instance',
+          copy: 'Runtime 已停止，但 Instance 身份、Data、Bindings 与 Annotations 仍保留的状态。',
+          example: '关闭编辑器后，访谈工程仍能被再次启动，不需要从原始视频重新创建。',
+        },
+        'archived-instance': {
+          title: 'Archived Instance',
+          copy: '已经归档、仍可恢复，但必须先恢复为 Stopped 才能再次启动的状态。',
+          example: '完成交付的视频工程被归档；几个月后可以 Restore，再 Start 继续修改字幕。',
+        },
+        'instance-manifest': {
+          title: 'instance.json',
+          copy: '保存 Instance 身份、三态生命周期、当前 Package Binding、current revision 和替换来源的低频清单。',
+          example:
+            '记录 instance_chatcut_42 当前是 stopped，已从 ChatCut Package 1.3.0 替换到 1.4.0，Data revision 为某个 opaque Git commit。',
+        },
+        'managed-data': {
+          title: 'data/',
+          copy: 'OA 管理的 Instance 工作文件目录；Daemon 用内置 Git repository 记录成功 mutation，并把 commit 暴露为 opaque revision。',
+          example:
+            'project.json 保存轨道和 clip，captions.vtt 保存字幕，thumbnails/ 保存派生预览。',
+        },
+        'data-bindings': {
+          title: 'bindings.json',
+          copy: 'Instance 对外部本地文件或线上数据源的持久引用，不等于复制数据本体。',
+          example: 'IMG_4822.MOV 继续留在用户素材目录，Instance 只保存受控引用和访问关系。',
+        },
+        'annotation-store': {
+          title: 'annotations.sqlite',
+          copy: 'OA 独立拥有的 Annotation 记录库，保存 Target、Snapshot、reply、status、receipt 与关联的 Data revision，不与业务 Data 混写。',
+          example:
+            '时间范围评论、截图证据、Agent 回复和 resolved 状态都保存在这里，而不是 project.json。',
+        },
+        'minimum-core': {
+          title: '当前核心',
+          copy: '一个 OA Daemon，内部包含 Instance Manager、Data、Annotation、Tool 与 Runtime SDK Context，就能完成最薄协作闭环。',
+          example:
+            '创建视频 Instance、保存工程、提交时间范围评论、让 Agent 调用 trim，并在同一 UI 中看到结果。',
+        },
+        'deferred-modules': {
+          title: '不作为一级模块',
+          copy: '幂等、Git 提交和 change event 必须存在，但先作为 Daemon 内部实现；SDK Binding 的工程机制与远程文件系统抽象暂不提前拆分。',
+          example:
+            'trim 的原子写入与幂等 receipt 先由 Daemon 处理，不额外建立 Commit Coordinator；云端 Agent 也暂不能编辑本地 Package。',
+        },
+      };
+
+      const flowContent = {
+        all: {
+          label: '全部关系',
+          copy: 'Package 提供定义；OA Daemon 保存 Instance 身份和三项能力；Runtime SDK 与 Agent Adapter 从不同入口进入同一个权威面。',
+          code: 'package → daemon(instance) → data | annotation | tool',
+        },
+        human: {
+          label: 'Human',
+          copy: 'Human 通过 Artifact UI 查看和编辑 Data，通过 Workbench 创建 Annotation；Human 不直接使用 Agent Tool API。',
+          code: 'human → UI → data · human → annotation',
+        },
+        agent: {
+          label: 'Agent',
+          copy: 'Agent 通过 OA CLI / Remote MCP Adapter 显式传 instanceId，读取 Data 和 Annotation，并发现或调用当前 Package Tools。',
+          code: 'agent → adapter(instanceId) → daemon → data | annotation | tool',
+        },
+        annotation: {
+          label: 'Annotation',
+          copy: 'Human 的 Selection 被描述为 Target，OA 独立保存 Snapshot；Agent 执行前重新定位，成功先 applied，验证或验收后才 resolved。',
+          code: 'selection → snapshot → resolveTarget → applied → resolved',
+        },
+        tool: {
+          label: 'Tool',
+          copy: 'Agent 调用 Package 声明的 Tool；Daemon 校验 instanceId、状态、revision 与幂等键，Handler 通过已绑定当前 Instance 的 SDK 修改 Data。',
+          code: 'agent → tool.call(instanceId) → daemon → handler → Git revision → UI',
+        },
+        lifecycle: {
+          label: 'Lifecycle',
+          copy: 'Instance Manager 只管理 Active、Stopped、Archived 三种状态；Runtime 可以消失，Instance Bundle 继续存在。',
+          code: 'Active ↔ Stopped ↔ Archived',
+        },
+      };
+
+      const tooltip = document.querySelector('#architecture-tooltip');
+      const tooltipTitle = document.querySelector('#tooltip-title');
+      const tooltipCopy = document.querySelector('#tooltip-copy');
+      const tooltipExample = document.querySelector('#tooltip-example');
+      const tipHosts = [...document.querySelectorAll('[data-tip-key]')];
+      let activeTipHost = null;
+      let pinnedTipHost = null;
+
+      function positionTooltip(host) {
+        if (!host || tooltip.hidden) return;
+
+        const rect = host.getBoundingClientRect();
+        const edge = 14;
+        const width = tooltip.offsetWidth;
+        const height = tooltip.offsetHeight;
+        let left = rect.left + rect.width / 2 - width / 2;
+        let top = rect.top - height - 12;
+
+        left = Math.max(edge, Math.min(left, window.innerWidth - width - edge));
+        if (top < edge) top = rect.bottom + 12;
+        if (top + height > window.innerHeight - edge) {
+          top = Math.max(edge, rect.top - height - 12);
+        }
+
+        tooltip.style.left = `${Math.round(left)}px`;
+        tooltip.style.top = `${Math.round(top)}px`;
+      }
+
+      function showTip(host) {
+        const tip = architectureTips[host?.dataset.tipKey];
+        if (!tip) return;
+
+        activeTipHost = host;
+        tooltipTitle.textContent = tip.title;
+        tooltipCopy.textContent = tip.copy;
+        tooltipExample.textContent = tip.example;
+        tooltip.hidden = false;
+
+        for (const candidate of tipHosts) {
+          const isOpen = candidate === host;
+          candidate.classList.toggle('tip-open', isOpen);
+          candidate
+            .querySelector(':scope > .tip-trigger')
+            ?.setAttribute('aria-expanded', String(isOpen));
+        }
+
+        requestAnimationFrame(() => positionTooltip(host));
+      }
+
+      function dismissTip(force = false) {
+        if (pinnedTipHost && !force) return;
+
+        tooltip.hidden = true;
+        activeTipHost = null;
+        for (const host of tipHosts) {
+          host.classList.remove('tip-open');
+          host.querySelector(':scope > .tip-trigger')?.setAttribute('aria-expanded', 'false');
+        }
+      }
+
+      for (const host of tipHosts) {
+        const tip = architectureTips[host.dataset.tipKey];
+        if (!tip) continue;
+
+        const trigger = document.createElement('button');
+        trigger.className = 'tip-trigger';
+        trigger.type = 'button';
+        trigger.textContent = '?';
+        trigger.setAttribute('aria-label', `解释 ${tip.title}，并查看 ChatCut 示例`);
+        trigger.setAttribute('aria-describedby', 'architecture-tooltip');
+        trigger.setAttribute('aria-expanded', 'false');
+        host.append(trigger);
+
+        host.addEventListener('pointerenter', () => {
+          if (!pinnedTipHost) showTip(host);
+        });
+        host.addEventListener('pointerleave', (event) => {
+          if (pinnedTipHost) return;
+          const nextHost = event.relatedTarget?.closest?.('[data-tip-key]');
+          if (nextHost) showTip(nextHost);
+          else dismissTip();
+        });
+        trigger.addEventListener('focus', () => showTip(host));
+        trigger.addEventListener('blur', () => {
+          if (pinnedTipHost !== host) dismissTip();
+        });
+        trigger.addEventListener('click', (event) => {
+          event.stopPropagation();
+          if (pinnedTipHost === host) {
+            pinnedTipHost = null;
+            dismissTip(true);
+          } else {
+            pinnedTipHost = host;
+            showTip(host);
+          }
+        });
+      }
+
+      document.addEventListener('pointerdown', (event) => {
+        if (pinnedTipHost && !pinnedTipHost.contains(event.target)) {
+          pinnedTipHost = null;
+          dismissTip(true);
+        }
+      });
+
+      document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && (activeTipHost || pinnedTipHost)) {
+          pinnedTipHost = null;
+          dismissTip(true);
+        }
+      });
+
+      window.addEventListener(
+        'scroll',
+        () => {
+          if (activeTipHost) positionTooltip(activeTipHost);
+        },
+        { passive: true },
+      );
+
+      window.addEventListener('resize', () => {
+        if (activeTipHost) positionTooltip(activeTipHost);
+      });
+
+      const flowButtons = [...document.querySelectorAll('[data-flow-button]')];
+      const flowTargets = [...document.querySelectorAll('.architecture-map .flow-target')];
+      const flowLabel = document.querySelector('#flow-label');
+      const flowCopy = document.querySelector('#flow-copy');
+      const flowCode = document.querySelector('#flow-code');
+
+      function applyFlow(flow) {
+        pinnedTipHost = null;
+        dismissTip(true);
+
+        for (const button of flowButtons) {
+          button.setAttribute('aria-pressed', String(button.dataset.flowButton === flow));
+        }
+
+        for (const target of flowTargets) {
+          const flows = target.dataset.flow?.split(' ') || [];
+          const active = flow === 'all' || flows.includes(flow);
+          target.classList.toggle('is-muted', !active);
+          target.classList.toggle('is-active', flow !== 'all' && active);
+        }
+
+        const content = flowContent[flow] || flowContent.all;
+        flowLabel.textContent = content.label;
+        flowCopy.textContent = content.copy;
+        flowCode.textContent = content.code;
+      }
+
+      for (const button of flowButtons) {
+        button.addEventListener('click', () => applyFlow(button.dataset.flowButton || 'all'));
+      }
+    </script>
+  </body>
+</html>
